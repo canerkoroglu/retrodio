@@ -1,0 +1,14 @@
+# Style of the hand-written firmware sources (components/rg, hwtest, test/host).
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 120
+BreakBeforeBraces: Linux
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+IndentCaseLabels: false
+PointerAlignment: Right
+SortIncludes: Never
+AlignConsecutiveMacros: Consecutive
+AlignTrailingComments: true
+SpaceBeforeParens: ControlStatements

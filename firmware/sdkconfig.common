@@ -1,0 +1,31 @@
+# Shared by firmware/hwtest and firmware/guestbook (each project's CMakeLists.txt loads it).
+CONFIG_IDF_TARGET="esp32c3"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Console on the built-in USB-Serial-JTAG; UART0 pins (GPIO20/21) are used by the SD card.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# Energy: 80 MHz is ample for 16 kHz audio + SD and saves ~6 mA while awake (datasheet
+# Table 5-8: 17 vs 23 mA CPU running). I2S and SPI clocks are independent of the CPU clock.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
+
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
+
+# Watchdog: a task stuck > 10 s (e.g. SD write) panics and reboots; the crash-loop guard and
+# power-cut recovery take over from there.
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+CONFIG_ESP_TASK_WDT_PANIC=y
+
+# Crash dumps to flash for after-event diagnosis (idf.py coredump-info). Keep the first one.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../partitions.csv"
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_FLASH_NO_OVERWRITE=y
+
+# Long file names (MSG_000001.wav, instruction.wav)
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=64
+
+# Faster wake from deep sleep (less awake time per session)
+CONFIG_BOOTLOADER_SKIP_VALIDATE_IN_DEEP_SLEEP=y

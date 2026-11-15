@@ -1,0 +1,28 @@
+# Retro Audio Guestbook settings. Copy to /audio/config.txt on the microSD card.
+# Lines are "key = value"; '#' starts a comment. Out-of-range values are clamped
+# and reported in /audio/log.txt. Delete a line to use the firmware default.
+
+# Playback volume in dB below full scale (-40..0). Hardware test 7 suggests a value.
+volume_db = -6
+
+# Microphone digital gain in dB (0..36).
+mic_gain_db = 12
+
+# Maximum message length in seconds (10..300).
+max_seconds = 180
+
+# Messages shorter than this (guest hung up right after the beep) are discarded (0..10 s).
+min_seconds = 1
+
+# Status LED brightness cap (1..255). Lower saves energy.
+led_brightness = 40
+
+# OLED contrast (1..255). Lower saves energy and reduces burn-in.
+oled_contrast = 48
+
+# Standby screen: full (title + total + hint), minimal (total only, lowest current),
+# or off (panel asleep, lowest current; the total is shown again when the handset is lifted).
+standby_screen = full
+
+# Warn on the display when less than this many minutes of recording space remain (5..600).
+low_space_minutes = 30

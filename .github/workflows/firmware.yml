@@ -1,0 +1,58 @@
+name: firmware
+
+on:
+  push:
+    paths: ["firmware/**", ".github/workflows/firmware.yml"]
+  pull_request:
+    paths: ["firmware/**", ".github/workflows/firmware.yml"]
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S firmware/test/host -B build/host
+      - name: Build
+        run: cmake --build build/host
+      - name: Test
+        run: ctest --test-dir build/host --output-on-failure
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: clang-format check
+        run: |
+          pip install --quiet clang-format==23.1.5
+          find firmware/components firmware/hwtest/main firmware/guestbook/main firmware/test -name '*.[ch]' \
+            ! -name 'rg_font5x7.c' -print0 | xargs -0 clang-format --style=file:firmware/.clang-format --dry-run --Werror
+
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v6.1.1
+    strategy:
+      matrix:
+        include:
+          - name: hwtest
+            dir: firmware/hwtest
+            args: ""
+          - name: guestbook
+            dir: firmware/guestbook
+            args: ""
+          - name: guestbook-soak
+            dir: firmware/guestbook
+            args: -B build -D SDKCONFIG=build/sdkconfig -D SDKCONFIG_DEFAULTS="../sdkconfig.common;sdkconfig.soak"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.name }}
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          cd ${{ matrix.dir }}
+          idf.py ${{ matrix.args }} set-target esp32c3
+          idf.py ${{ matrix.args }} build merge-bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-merged-binary
+          path: ${{ matrix.dir }}/build/merged-binary.bin

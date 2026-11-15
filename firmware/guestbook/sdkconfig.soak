@@ -1,0 +1,3 @@
+# Overlay for the automated Phase 5 soak test (see docs/testing.md). Never use at an event:
+# it simulates the hook switch and records real MSG files on the card.
+CONFIG_GB_SOAK_TEST=y

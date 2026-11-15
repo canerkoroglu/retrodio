@@ -1,0 +1,115 @@
+menu "Retro Guestbook"
+
+    menu "GPIO assignment (ESP32-C3 Super Mini)"
+        config RG_PIN_I2S_BCLK
+            int "I2S BCLK (MAX98357A BCLK + mic SCK)"
+            range 0 21
+            default 0
+        config RG_PIN_I2S_WS
+            int "I2S WS (MAX98357A LRC + mic WS)"
+            range 0 21
+            default 1
+        config RG_PIN_SD_CS
+            int "MicroSD CS (strapping pin, 10k pull-up)"
+            range 0 21
+            default 2
+        config RG_PIN_HOOK
+            int "Hook switch (must be RTC GPIO0-5 for deep-sleep wake)"
+            range 0 5
+            default 3
+        config RG_PIN_SD_SCK
+            int "MicroSD SCK"
+            range 0 21
+            default 4
+        config RG_PIN_I2S_DIN
+            int "I2S data in (mic SD)"
+            range 0 21
+            default 5
+        config RG_PIN_I2S_DOUT
+            int "I2S data out (MAX98357A DIN)"
+            range 0 21
+            default 6
+        config RG_PIN_LED
+            int "WS2812B data (via 74AHCT1G125)"
+            range 0 21
+            default 7
+        config RG_PIN_I2C_SDA
+            int "OLED SDA"
+            range 0 21
+            default 8
+        config RG_PIN_I2C_SCL
+            int "OLED SCL"
+            range 0 21
+            default 9
+        config RG_PIN_PWR_EN
+            int "Peripheral power switch enable (100k pull-down, high = rail on)"
+            range 0 21
+            default 10
+        config RG_PIN_SD_MISO
+            int "MicroSD MISO"
+            range 0 21
+            default 20
+        config RG_PIN_SD_MOSI
+            int "MicroSD MOSI"
+            range 0 21
+            default 21
+    endmenu
+
+    config RG_POWER_SETTLE_MS
+        int "Switched 5 V rail settle time after power-on (ms)"
+        range 5 500
+        default 30
+        help
+            Covers the P-MOSFET soft start, the SD module regulator and the mic LDO.
+
+    config RG_MAX_RECORD_SECONDS
+        int "Default maximum recording length (s)"
+        range 10 300
+        default 180
+
+    config RG_HOOK_LIFTED_LEVEL
+        int "Hook GPIO level when the handset is lifted"
+        range 0 1
+        default 0
+        help
+            0 for the recommended COM->GND, NC->GPIO wiring (lifted closes NC to GND).
+
+    config RG_HOOK_DEBOUNCE_MS
+        int "Hook debounce time (ms)"
+        range 5 500
+        default 40
+
+    config RG_SD_FREQ_KHZ
+        int "MicroSD SPI clock (kHz)"
+        range 400 40000
+        default 20000
+
+    config RG_MIC_GAIN_DB
+        int "Microphone digital gain (dB)"
+        range 0 36
+        default 12
+
+    config RG_MIC_DC_BLOCK
+        bool "Remove DC offset from microphone samples"
+        default y
+
+    config RG_PLAYBACK_VOLUME_DB
+        int "Playback volume (dB relative to full scale, <= 0)"
+        range -40 0
+        default -6
+
+    config RG_LED_MAX_BRIGHTNESS
+        int "WS2812B maximum channel value (0-255)"
+        range 1 255
+        default 40
+
+    config RG_OLED_I2C_ADDR
+        hex "SSD1306 I2C address"
+        default 0x3C
+
+    config RG_OLED_CONTRAST
+        hex "SSD1306 contrast (lower reduces burn-in)"
+        range 0x01 0xFF
+        default 0x30
+
+endmenu

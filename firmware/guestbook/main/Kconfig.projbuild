@@ -1,0 +1,64 @@
+menu "Guestbook application"
+
+    config GB_WAKE_CONFIRM_MS
+        int "Handset must read 'lifted' this long after wake (ms)"
+        range 10 1000
+        default 60
+        help
+            Wakes where the handset does not stay lifted are treated as false wakes
+            and go straight back to sleep.
+
+    config GB_SLEEP_STABLE_MS
+        int "Handset must stay down this long before deep sleep (ms)"
+        range 100 5000
+        default 500
+
+    config GB_SUCCESS_SCREEN_MS
+        int "KAYIT BASARILI screen + solid green LED (ms)"
+        range 500 10000
+        default 2000
+
+    config GB_ERROR_SCREEN_MS
+        int "Minimum error screen time (ms)"
+        range 500 20000
+        default 3000
+
+    config GB_SAVE_TIMEOUT_MS
+        int "Maximum time to finalize a message before rebooting (ms)"
+        range 1000 9000
+        default 5000
+        help
+            Must stay below CONFIG_ESP_TASK_WDT_TIMEOUT_S.
+
+    config GB_RING_KB
+        int "Recording RAM ring buffer (KB)"
+        range 16 128
+        default 64
+        help
+            Absorbs SD write stalls. Size from hardware test 5 (ring_kb).
+
+    config GB_MIN_FREE_KB
+        int "Refuse to start a message with less free card space (KB)"
+        range 256 65536
+        default 1024
+
+    config GB_SOAK_TEST
+        bool "Soak test: simulate the hook switch for automated sessions"
+        default n
+        help
+            Phase 5 reliability test. Lift/hang-up are simulated and the device wakes by
+            timer. Real MSG files are written. Never enable for an event build.
+
+    config GB_SOAK_SESSIONS
+        int "Soak test sessions"
+        depends on GB_SOAK_TEST
+        range 1 10000
+        default 100
+
+    config GB_SOAK_RECORD_S
+        int "Soak test: seconds recorded per normal session"
+        depends on GB_SOAK_TEST
+        range 1 60
+        default 4
+
+endmenu
