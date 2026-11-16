@@ -95,6 +95,9 @@ esp_err_t rg_wav_probe(const char *path, rg_wav_info_t *info)
             err = ESP_OK;
             goto out;
         }
+        if (size > info->file_bytes - pos - 8) {
+            break; /* chunk runs past the end (damaged size field): stop instead of wrapping around */
+        }
         pos += 8 + size + (size & 1);
     }
 out:
@@ -111,8 +114,9 @@ esp_err_t rg_wav_writer_open(rg_wav_writer_t *w, const char *path, uint32_t rate
 {
     w->fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0664);
     if (w->fd < 0) {
-        ESP_LOGE(TAG, "open %s: errno %d", path, errno);
-        return errno == EEXIST ? ESP_ERR_INVALID_STATE : ESP_FAIL;
+        int e = errno;
+        ESP_LOGE(TAG, "open %s: errno %d", path, e);
+        return e == EEXIST ? ESP_ERR_INVALID_STATE : ESP_FAIL;
     }
     w->rate = rate;
     w->data_bytes = 0;
@@ -130,13 +134,16 @@ esp_err_t rg_wav_writer_open(rg_wav_writer_t *w, const char *path, uint32_t rate
 esp_err_t rg_wav_writer_write(rg_wav_writer_t *w, const void *data, size_t bytes)
 {
     ESP_RETURN_ON_FALSE(w->fd >= 0, ESP_ERR_INVALID_STATE, TAG, "closed");
+    errno = 0;
     ssize_t n = write(w->fd, data, bytes);
+    int e = errno;
     if (n > 0) {
         w->data_bytes += (uint32_t)n;
     }
     if (n != (ssize_t)bytes) {
-        ESP_LOGE(TAG, "write %u -> %d, errno %d", (unsigned)bytes, (int)n, errno);
-        return errno == ENOSPC ? RG_ERR_CARD_FULL : ESP_FAIL;
+        ESP_LOGE(TAG, "write %u -> %d, errno %d", (unsigned)bytes, (int)n, e);
+        /* FatFs reports a full card as a short write; errno is ENOSPC only when nothing was written. */
+        return n >= 0 || e == ENOSPC ? RG_ERR_CARD_FULL : ESP_FAIL;
     }
     return ESP_OK;
 }
@@ -192,7 +199,7 @@ esp_err_t rg_wav_repair(const char *path, uint32_t min_data_bytes, rg_wav_repair
     }
     uint32_t size = (uint32_t)st.st_size;
     uint32_t data = size > offset ? (size - offset) & ~1U : 0;
-    if (!is_wav || data < min_data_bytes) {
+    if (!is_wav || data == 0 || data < min_data_bytes) { /* never keep an empty message */
         *action = RG_WAV_REPAIR_DELETED;
         return unlink(path) == 0 ? ESP_OK : ESP_FAIL;
     }

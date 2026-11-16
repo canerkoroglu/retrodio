@@ -44,16 +44,14 @@ static void render_standby(void)
         rg_oled_display_on(false);
         return;
     }
-    char line[26];
+    char count[8];
     int shift = (int)(s_wakes % 3) - 1;
-    snprintf(line, sizeof(line), "TOPLAM: %03lu", (unsigned long)s_wakes);
+    snprintf(count, sizeof(count), "%03lu", (unsigned long)(s_wakes % 1000));
     rg_oled_clear();
     if (s_screen == RG_STANDBY_FULL) {
-        rg_oled_text((128 - rg_oled_text_width("AUDIO GUESTBOOK", 1)) / 2 + shift, 0, "AUDIO GUESTBOOK", 1);
-        rg_oled_text((128 - rg_oled_text_width(line, 1)) / 2 + shift, 12, line, 1);
-        rg_oled_text((128 - rg_oled_text_width("AHIZEYI KALDIRIN", 1)) / 2 + shift, 24, "AHIZEYI KALDIRIN", 1);
+        rg_oled_action_screen(count, "AHIZEYI", "KALDIRIN", 0, shift);
     } else {
-        rg_oled_text((128 - rg_oled_text_width(line, 1)) / 2 + shift, 12 + shift, line, 1);
+        rg_oled_action_screen(count, NULL, NULL, 0, shift);
     }
     rg_oled_flush();
 }

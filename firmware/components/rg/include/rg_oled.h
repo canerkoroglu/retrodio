@@ -26,6 +26,15 @@ void rg_oled_rect(int x, int y, int w, int h, bool fill);
 void rg_oled_text(int x, int y, const char *s, int scale);
 void rg_oled_text_center(int y, const char *s, int scale);
 int rg_oled_text_width(const char *s, int scale);
+/** Text rotated 90 degrees counter-clockwise (reads bottom to top). (x, y) is the top-left of a
+ *  box 7*scale wide and rg_oled_text_width(s, scale) tall. */
+void rg_oled_text_vertical(int x, int y, const char *s, int scale);
+/**
+ * Guestbook screen layout: `side` (e.g. the message count) rotated at the top-left, then one or
+ * two lines at scale 2 (up to 11 characters each), centred in the space right of the label minus
+ * `reserve_right` pixels. `dx` shifts everything by a pixel against burn-in. NULL skips a part.
+ */
+void rg_oled_action_screen(const char *side, const char *top, const char *bottom, int reserve_right, int dx);
 
 /** Push the frame buffer to the panel (~13 ms at 400 kHz). */
 esp_err_t rg_oled_flush(void);

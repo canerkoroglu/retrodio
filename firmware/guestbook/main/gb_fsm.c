@@ -152,11 +152,15 @@ static bool mount_card(fsm_t *f)
                         : rec.action == RG_WAV_REPAIR_DELETED ? "deleted (too short)"
                                                               : "already consistent",
                         (unsigned long)rec.data_bytes);
+            if (rec.action != RG_WAV_REPAIR_DELETED) {
+                rg_catalog_invalidate(); /* a kept file is not in the deep-sleep cache count yet */
+            }
         }
         rg_catalog_state_t cat;
         ok = rg_catalog_open(&cat) == ESP_OK;
-        if (!f->boot->from_deep_sleep) {
-            /* Cold boot only: deep-sleep wakes stay write-free on the card. */
+        static bool boot_logged; /* cold boot only, once: deep-sleep wakes stay write-free on the card */
+        if (!f->boot->from_deep_sleep && !boot_logged) {
+            boot_logged = true;
             rg_eventlog("boot #%lu fw %s, reset %s, crashes %lu, card %lu kHz, %lu messages, %lu damaged, %lu min free",
                         (unsigned long)f->boot->boot_count, f->boot->version, rg_reset_reason_name(f->boot->reason),
                         (unsigned long)f->boot->consecutive_crashes, (unsigned long)khz, (unsigned long)cat.count,
@@ -398,20 +402,28 @@ static void step(fsm_t *f, const gb_audio_event_t *ev, bool hook_changed, int64_
     case ST_RECORDING:
         if (hung_up) {
             gb_audio_hang_up();
-            enter(f, ST_SAVING);
-            break;
         }
         if (!ev) {
+            if (hung_up) {
+                enter(f, ST_SAVING);
+            }
             break;
         }
+        /* The capture may have ended on its own (recorder failure) in the same tick as the
+         * hang-up: its final event is handled here, ST_SAVING would wait for it forever. */
         switch (ev->type) {
         case GB_EV_REC_TICK:
+            if (hung_up) {
+                enter(f, ST_SAVING);
+                break;
+            }
             f->seconds_left = ev->value;
             show(f, GB_UI_RECORDING, false);
             break;
         case GB_EV_REC_LIMIT:
             f->seconds_left = 0;
-            enter(f, ST_MAX_DURATION); /* the engine finalizes right away; result shown on hang-up */
+            /* the engine finalizes right away; result shown on hang-up */
+            enter(f, hung_up ? ST_SAVING : ST_MAX_DURATION);
             break;
         case GB_EV_SAVED:
             on_saved(f, ev); /* recorder failure ended the capture */
@@ -423,6 +435,9 @@ static void step(fsm_t *f, const gb_audio_event_t *ev, bool hook_changed, int64_
             on_failed(f, ev);
             break;
         default:
+            if (hung_up) {
+                enter(f, ST_SAVING);
+            }
             break;
         }
         break;

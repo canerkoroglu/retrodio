@@ -87,12 +87,15 @@ tr_t t7_amp(void)
         printf("SD not mounted: skipping greeting files.\n");
     }
 
-    bool clean = files_found == 0 || hw_ask_yes("Did the greeting files play cleanly and intelligibly?");
-    tr_t r = step && !distorted && !pops && files_ok == files_found && clean ? TR_PASS : TR_FAIL;
+    /* Without all three prompts on the card the playback path is untested: report, do not pass. */
+    bool files_all = files_found == 3;
+    bool clean = files_found > 0 && hw_ask_yes("Did the greeting files play cleanly and intelligibly?");
+    bool ok = step && !distorted && !pops && files_ok == files_found && (files_found == 0 || clean);
+    tr_t r = !ok ? TR_FAIL : (files_all ? TR_PASS : TR_INFO);
     hw_result(7, r,
-              "comfortable_step=%d suggested_volume_db=%d (config.txt volume_db) distortion=%s pops=%s files_ok=%d/%d "
-              "clean=%s",
-              step, suggested_db, distorted ? "yes" : "no", pops ? "yes" : "no", files_ok, files_found,
-              clean ? "yes" : "no");
+              "comfortable_step=%d suggested_volume_db=%d (config.txt volume_db) distortion=%s pops=%s files=%s "
+              "files_ok=%d/%d clean=%s",
+              step, suggested_db, distorted ? "yes" : "no", pops ? "yes" : "no", files_all ? "ok" : "missing", files_ok,
+              files_found, clean ? "yes" : "no");
     return r;
 }

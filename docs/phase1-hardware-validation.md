@@ -390,7 +390,7 @@ Arduino adds a layer without removing any risk here.
 | D6 | Power entry | **Panel-mount USB-C power-only breakout (5.1 kΩ CC resistors)** + 1.5 A PTC + 1000 µF. Works with any 5 V/≥2 A USB adapter. | T9 (current) |
 | D7 | I²C pull-ups | The firmware enables internal pull-ups. Fit 4.7 kΩ to 3V3 only if T1 reports SDA/SCL floating. | T1 |
 | D8 | Power gating | **Changed for energy:** GPIO10 = `PWR_EN` rail switch for SD, amp, LED and mic. The amp's separate shutdown is dropped. Fallback if T6/T8 show cord coupling: the AMP_SD baseline (§4.3). | T1, T6, T8, T9 |
-| D9 | 180 s limit | **Finalize the WAV immediately at 180 s**, show "SURE DOLDU", wait for hang-up, then show the result. No audio is at risk if the handset is left off-hook. | Phase 5 |
+| D9 | 180 s limit | **Finalize the WAV immediately at 180 s**, show "AHIZEYI KAPATIN", wait for hang-up, then show the result. No audio is at risk if the handset is left off-hook. | Phase 5 |
 | D10 | I²S clocking | MCLK = 512·fs, so the TX BCLK divider is 8 (the IDF driver warns below 6 for TX at 256·fs). | build, T7/T8 |
 | D11 | Energy | CPU at 80 MHz. Red power LED desoldered. Standby screen `full` / `minimal` / `off` set in `config.txt`; default `full` (spec), final choice from T9 current readings. LED cap 40/255. OLED contrast 0x30. | T9 |
 | D12 | Robustness | SD writer on the task watchdog with a 5 s stop deadline. Power-cut repair of the in-progress file. Crash-loop safe mode after 3 crashes. Crash dumps kept in flash. CRC-32 manifest and event log on the card. | host tests, T5/T6 |

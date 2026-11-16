@@ -13,6 +13,7 @@
 #include "rg_board.h"
 #include "rg_err.h"
 #include "esp_system.h"
+#include "rg_power.h"
 #include "rg_recorder.h"
 #include "rg_storage.h"
 
@@ -29,6 +30,7 @@ typedef struct {
     uint32_t first_valid_us; /* beep fully played -> first non-zero mic word */
     uint32_t overflows;
     esp_err_t err;
+    bool wav_ok; /* the requested WAV was recorded and closed cleanly */
 } run_t;
 
 static esp_err_t play_beep(void)
@@ -50,7 +52,14 @@ static void capture(run_t *r, int64_t t_beep_done, uint32_t ms, const char *wav)
 {
     rg_mic_conv_t conv;
     rg_mic_conv_init(&conv, g_settings.mic_gain_db, CONFIG_RG_MIC_DC_BLOCK);
-    bool recording = wav && rg_rec_start(wav, 64 * 1024, 512 * 1024) == ESP_OK;
+    bool recording = false;
+    if (wav) {
+        esp_err_t e = rg_rec_start(wav, 64 * 1024, 512 * 1024);
+        recording = e == ESP_OK;
+        if (!recording) {
+            printf("  %s: rg_rec_start failed: %s\n", wav, rg_err_name(e));
+        }
+    }
     bool first = true, valid = false;
     for (uint32_t total = 0; total < RG_SAMPLE_RATE_HZ * ms / 1000;) {
         size_t got;
@@ -86,6 +95,7 @@ static void capture(run_t *r, int64_t t_beep_done, uint32_t ms, const char *wav)
         if (r->err == ESP_OK) {
             r->err = e;
         }
+        r->wav_ok = e == ESP_OK;
     }
     r->overflows = rg_audio_rx_overflows();
 }
@@ -110,8 +120,11 @@ static run_t run_duplex(uint32_t capture_ms, const char *wav)
 static run_t run_sequential(uint32_t capture_ms, const char *wav)
 {
     run_t r = {0};
+    /* Hold the rail across TX close -> RX open so the mic is not power-cycled (no SD keeping it up). */
+    rg_power_acquire();
     r.err = rg_audio_open(RG_AUDIO_TX, false);
     if (r.err != ESP_OK) {
+        rg_power_release();
         return r;
     }
     r.err = play_beep();
@@ -124,12 +137,13 @@ static run_t run_sequential(uint32_t capture_ms, const char *wav)
         capture(&r, t, capture_ms, wav);
     }
     rg_audio_close();
+    rg_power_release();
     return r;
 }
 
 typedef run_t (*mode_fn)(uint32_t, const char *);
 
-static bool evaluate(const char *name, mode_fn fn, const char *wav, uint32_t *gap_ms, uint32_t *valid_ms)
+static bool evaluate(const char *name, mode_fn fn, const char *wav, uint32_t *gap_ms, uint32_t *valid_ms, bool *wav_ok)
 {
     printf("\n[%s] measured run%s\n", name, wav ? " (3 s WAV)" : "");
     hw_oled_status("TX/RX TEST", name);
@@ -140,6 +154,7 @@ static bool evaluate(const char *name, mode_fn fn, const char *wav, uint32_t *ga
     printf("  err=%s gap=%lu us first_valid=%lu us overflows=%lu\n", rg_err_name(r.err), (unsigned long)r.gap_us,
            (unsigned long)r.first_valid_us, (unsigned long)r.overflows);
     bool ok = r.err == ESP_OK && r.first_valid_us > 0;
+    *wav_ok = r.wav_ok;
     uint32_t worst_gap = r.gap_us, worst_valid = r.first_valid_us;
 
     printf("[%s] stress: %d cycles\n", name, STRESS_RUNS);
@@ -166,15 +181,20 @@ tr_t t8_duplex(void)
     printf("Hold the handset; you will hear %d short beeps per mode. Speak after a beep to fill the WAVs.\n",
            STRESS_RUNS + 1);
     uint32_t dg, dv, sg, sv;
-    bool duplex_ok = evaluate("DUPLEX", run_duplex, sd ? RG_DIR_RECORDINGS "/TEST_DUPLEX.wav" : NULL, &dg, &dv);
-    bool seq_ok = evaluate("SEQUENTIAL", run_sequential, sd ? RG_DIR_RECORDINGS "/TEST_SEQ.wav" : NULL, &sg, &sv);
+    bool dw, sw;
+    bool duplex_ok = evaluate("DUPLEX", run_duplex, sd ? RG_DIR_RECORDINGS "/TEST_DUPLEX.wav" : NULL, &dg, &dv, &dw);
+    bool seq_ok = evaluate("SEQUENTIAL", run_sequential, sd ? RG_DIR_RECORDINGS "/TEST_SEQ.wav" : NULL, &sg, &sv, &sw);
 
     const char *pick = duplex_ok ? "duplex" : (seq_ok ? "sequential" : "none");
+    const char *wavs = dw && sw ? "TEST_DUPLEX.wav,TEST_SEQ.wav"
+                       : dw     ? "TEST_DUPLEX.wav"
+                       : sw     ? "TEST_SEQ.wav"
+                                : "none";
     tr_t r = duplex_ok || seq_ok ? TR_PASS : TR_FAIL;
     hw_result(8, r,
               "duplex=%s duplex_gap_ms=%lu duplex_valid_ms=%lu sequential=%s seq_gap_ms=%lu seq_valid_ms=%lu "
               "use=%s wavs=%s",
               duplex_ok ? "ok" : "fail", (unsigned long)dg, (unsigned long)dv, seq_ok ? "ok" : "fail",
-              (unsigned long)sg, (unsigned long)sv, pick, sd ? "TEST_DUPLEX.wav,TEST_SEQ.wav" : "none");
+              (unsigned long)sg, (unsigned long)sv, pick, wavs);
     return r;
 }

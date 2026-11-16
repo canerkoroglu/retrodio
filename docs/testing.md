@@ -33,14 +33,14 @@ Then reflash the **normal** build: `idf.py -p PORT flash` in `firmware/guestbook
 
 | # | Scenario | Steps | Expected |
 |---|---|---|---|
-| B1 | Normal message | Lift, listen, speak 10 s after the beep, hang up | Greeting, instruction, beep; countdown from 03:00; KAYDEDILIYOR, KAYIT BASARILI, TOPLAM +1; green 2 s; sleep |
+| B1 | Normal message | Lift, listen, speak 10 s after the beep, hang up | Greeting, instruction, beep; KONUSMAYA BASLAYIN with countdown from 03:00; KAYDEDILIYOR, MESAJINIZ KAYDEDILDI!, count +1; green 2 s; sleep |
 | B2 | Hang-up during greeting | Lift, hang up after 2 s | No file, count unchanged, back to standby |
 | B3 | Hang-up during beep | Hang up while the beep sounds | No file, count unchanged |
 | B4 | Too short | Hang up < 1 s after the beep | File deleted, count unchanged |
-| B5 | Maximum duration | Set `max_seconds = 20` in `config.txt`, keep talking | At 00:00: SURE DOLDU, yellow; file already saved; hang up → KAYIT BASARILI |
-| B6 | Lift again during the result screen | Hang up, lift again while KAYIT BASARILI shows | New session starts after the result |
-| B7 | Never hung up | After B5, leave the handset off for 5 min | Stays on the SURE DOLDU screen and never sleeps; hang up → result |
-| B8 | Cold boot with handset lifted | Power on with the handset off | LUTFEN AHIZEYI / YERINE KOYUN; no greeting; sleeps after hang-up |
+| B5 | Maximum duration | Set `max_seconds = 20` in `config.txt`, keep talking | At 00:00: AHIZEYI KAPATIN, yellow; file already saved; hang up → MESAJINIZ KAYDEDILDI! |
+| B6 | Lift again during the result screen | Hang up, lift again while MESAJINIZ KAYDEDILDI! shows | New session starts after the result |
+| B7 | Never hung up | After B5, leave the handset off for 5 min | Stays on AHIZEYI KAPATIN and never sleeps; hang up → result |
+| B8 | Cold boot with handset lifted | Power on with the handset off | AHIZEYI KAPATIN; no greeting; sleeps after hang-up |
 | B9 | Bounce / quick tap | Tap the hook switch quickly 10× | No session starts, no stray files (false wakes go back to sleep) |
 | B10 | Playback quality | Copy B1's file to a PC | 16 kHz mono 16-bit, intelligible, no clicks or hum; level peaks around −12…−3 dBFS |
 
@@ -50,7 +50,7 @@ Then reflash the **normal** build: `idf.py -p PORT flash` in `firmware/guestbook
 |---|---|---|---|
 | C1 | No card | Remove the card, lift | KART HATASI, red; nothing recorded; sleeps after hang-up |
 | C2 | Card removed while recording | Pull the card mid-message | KAYIT HATASI; with the card back, the next boot repairs or deletes the file (`log.txt`: power-cut recovery) |
-| C3 | Card full before a session | Fill the card until < 1 MB + 10 s free, lift | KART DOLU; standby shows KART DOLMAK UZERE |
+| C3 | Card full before a session | Fill the card until < 1 MB + 10 s free, lift | KART DOLU; the standby count shows `!` (e.g. `025!`) |
 | C4 | Card fills during a message | Leave ~30 s free, record 60 s | Message kept (truncated), counted, `log.txt` "(card full)"; next lift: KART DOLU |
 | C5 | Power cut while recording | Unplug 20 s into a message, replug | Next boot: file repaired, ≤ 5 s lost, counted on the next cold boot |
 | C6 | Power cut while saving | Unplug during KAYDEDILIYOR | File either complete or repaired on boot; never a half-written header |

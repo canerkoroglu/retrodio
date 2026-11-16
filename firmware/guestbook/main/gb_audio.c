@@ -34,22 +34,24 @@ static void post(gb_audio_ev_type_t type, uint32_t value, esp_err_t err, const r
     xQueueSend(s_events, &ev, portMAX_DELAY);
 }
 
+/* Polled once per playback chunk (~64 ms): also feeds the task watchdog through long greetings. */
 static bool hung_up(void *ctx)
 {
     (void)ctx;
+    esp_task_wdt_reset();
     return s_hangup;
 }
 
-/* Missing files are skipped (instruction is optional); a wrong format is skipped with a warning
- * so a bad greeting never blocks the guest from leaving a message. */
+/* Missing files are skipped (instruction is optional); an unreadable or wrong-format file is
+ * skipped with a warning so a bad greeting never blocks the guest from leaving a message. */
 static esp_err_t play_optional(const char *path)
 {
     esp_err_t err = rg_audio_play_wav(path, hung_up, NULL);
     if (err == ESP_ERR_NOT_FOUND) {
         return ESP_OK;
     }
-    if (err == RG_ERR_BAD_FORMAT) {
-        ESP_LOGW(TAG, "%s skipped: not 16 kHz mono 16-bit", path);
+    if (err == RG_ERR_BAD_FORMAT || err == ESP_ERR_INVALID_RESPONSE) {
+        ESP_LOGW(TAG, "%s skipped: not a readable 16 kHz mono 16-bit WAV", path);
         return ESP_OK;
     }
     return err;
@@ -65,7 +67,7 @@ static esp_err_t play_beep(void)
     const uint32_t total = RG_SAMPLE_RATE_HZ * BEEP_MS / 1000;
     int16_t buf[FRAMES];
     for (uint32_t done = 0; done < total;) {
-        if (s_hangup) {
+        if (hung_up(NULL)) {
             return RG_ERR_ABORTED;
         }
         uint32_t n = total - done < FRAMES ? total - done : FRAMES;
@@ -175,7 +177,7 @@ static void run_session(const gb_session_t *ss)
         post(d == RG_ERR_TIMEOUT ? GB_EV_FAILED : GB_EV_DISCARDED, samples, d, NULL);
         goto out;
     }
-    rg_rec_stats_t stats;
+    rg_rec_stats_t stats = {0}; /* not written by rg_rec_stop() on a timeout */
     err = rg_rec_stop(&stats, ss->save_timeout_ms);
     if (stats.dropped_bytes) {
         ESP_LOGW(TAG, "%lu bytes dropped: ring buffer too small for this card", (unsigned long)stats.dropped_bytes);

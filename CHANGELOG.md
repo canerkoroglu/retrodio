@@ -2,6 +2,16 @@
 
 ## 1.0.0 (guestbook), unreleased: not yet run on hardware
 
+- OLED shows only the action, in large letters (2×): AHIZEYI KALDIRIN (standby, greeting) → KONUSMAYA BASLAYIN (recording, small countdown top-right) → AHIZEYI KAPATIN (time limit, handset left up) → MESAJINIZ KAYDEDILDI!. The message count is rotated 90° at the top-left (`!` when the card is almost full). Shared layout `rg_oled_action_screen()` is used by the guestbook and hwtest T2/T9.
+- Fixes from code review:
+  - Greeting/instruction longer than ~10 s no longer trips the task watchdog (reboot mid-greeting); playback feeds it.
+  - A hang-up in the same tick as a recorder failure no longer leaves the device stuck on KAYDEDILIYOR.
+  - Card filling up mid-message is detected (FatFs short write) and the truncated message is kept and counted.
+  - An unreadable greeting/instruction file (truncated, renamed MP3) is skipped instead of failing every session.
+  - Power-cut recovery deletes header-only files even with `min_seconds = 0`; a kept file refreshes the deep-sleep count.
+  - WAV probe can no longer loop forever on a damaged chunk size.
+  - The cold-boot log line is written once per boot.
+  - hwtest: T1 HOOK check waits for the 100 nF debounce cap; T7 is INFO (not PASS) without greeting files; T3 reports the brightness cap in effect; T4 counters reset per run; T5 always closes its file; T6 noise excludes DC; T8 lists only WAVs written and holds the rail across the sequential switch; RX-only audio holds amp DIN low.
 - Guestbook application `firmware/guestbook`.
   - State machine: INITIALIZING, WAKING, GREETING, INSTRUCTION, BEEP, RECORDING, MAX_DURATION, SAVING, SUCCESS, ERROR, HANG_UP, PREPARING_SLEEP. Standby is deep sleep.
   - Audio session engine: one I²S duplex session per guest. The file is created before the greeting and deleted on an early hang-up or a message shorter than `min_seconds`.

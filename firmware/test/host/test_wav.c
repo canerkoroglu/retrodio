@@ -89,6 +89,13 @@ int main(void)
     CHECK(rg_wav_repair(d, 32000, &act, &bytes) == ESP_OK && act == RG_WAV_REPAIR_DELETED);
     CHECK(file_size(d) == -1);
 
+    /* Repair: header-only file is deleted even with min_seconds = 0 (power cut during the greeting). */
+    const char *d0 = strdup(tmp("d0.wav"));
+    CHECK(rg_wav_writer_open(&w, d0, 16000) == ESP_OK);
+    close(w.fd);
+    CHECK(rg_wav_repair(d0, 0, &act, &bytes) == ESP_OK && act == RG_WAV_REPAIR_DELETED);
+    CHECK(file_size(d0) == -1);
+
     /* Repair: not a WAV at all is deleted; missing file reports NOT_FOUND. */
     const char *e = strdup(tmp("e.wav"));
     write_file(e, "garbage-garbage-garbage-garbage-garbage-garbage", 47);
@@ -117,5 +124,12 @@ int main(void)
     const char *g = strdup(tmp("stereo.wav"));
     write_file(g, buf, 44);
     CHECK(rg_wav_probe(g, &info) == ESP_OK && !rg_wav_is_playable(&info));
+
+    /* Probe: a damaged chunk size that would wrap the 32-bit offset terminates instead of looping. */
+    memcpy(buf, list_wav, 36);
+    memcpy(buf + 36, "JUNK\xf8\xff\xff\xff", 8);
+    const char *h = strdup(tmp("wrap.wav"));
+    write_file(h, buf, 52);
+    CHECK(rg_wav_probe(h, &info) == ESP_ERR_INVALID_RESPONSE);
     return DONE();
 }

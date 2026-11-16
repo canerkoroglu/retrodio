@@ -10,7 +10,7 @@ menu "Retro Guestbook"
             range 0 21
             default 1
         config RG_PIN_SD_CS
-            int "MicroSD CS (strapping pin, 10k pull-up)"
+            int "MicroSD CS (strapping pin, 100k pull-up)"
             range 0 21
             default 2
         config RG_PIN_HOOK

@@ -45,18 +45,20 @@ stateDiagram-v2
     PREPARING_SLEEP --> [*]: down >= 500 ms -> deep sleep (STANDBY)
 ```
 
+Every screen except ERROR uses one layout: the message count rotated 90° at the top-left (`025`, `---` before the card is read, `025!` when the card is almost full), and the action in large letters (2×, up to 11 characters per line) beside it.
+
 | State | OLED | WS2812B | Rail | Notes |
 |---|---|---|---|---|
-| STANDBY (deep sleep) | AUDIO GUESTBOOK / TOPLAM: 024 / AHIZEYI KALDIRIN (`full`), count only (`minimal`), or panel off | off | **off** | ESP32 + OLED only |
-| WAKING | HAZIRLANIYOR... | blue, short blink | on | lift must stay ≥ 60 ms; card mount, recovery, `config.txt`, catalog |
-| GREETING | HOS GELDINIZ | yellow, slow breathing | on | WAV file already created (SD latency can never cost the first words) |
-| INSTRUCTION / BEEP | SINYAL SESINDEN / SONRA KONUSUN | yellow, slow breathing | on | `beep.wav`, or a built-in 400 ms 1 kHz tone |
-| RECORDING | MESAJINIZI BIRAKIN / 02:59 | green, breathing | on | countdown each second |
-| MAX_DURATION | SURE DOLDU / LUTFEN AHIZEYI / YERINE KOYUN | yellow, solid | on | message already finalized (decision D9) |
-| SAVING | KAYDEDILIYOR... | cyan, fast blink | on | header, fsync, close, re-open, verify |
-| SUCCESS | KAYIT BASARILI / TOPLAM: 025 | green, solid 2 s | on | count and manifest updated only now |
+| STANDBY (deep sleep) | AHIZEYI / KALDIRIN (`full`), count only (`minimal`), or panel off | off | **off** | ESP32 + OLED only |
+| WAKING | AHIZEYI / KALDIRIN | blue, short blink | on | lift must stay ≥ 60 ms; card mount, recovery, `config.txt`, catalog |
+| GREETING | AHIZEYI / KALDIRIN | yellow, slow breathing | on | WAV file already created (SD latency can never cost the first words) |
+| INSTRUCTION / BEEP | AHIZEYI / KALDIRIN | yellow, slow breathing | on | `beep.wav`, or a built-in 400 ms 1 kHz tone |
+| RECORDING | KONUSMAYA / BASLAYIN, small 02:59 top-right | green, breathing | on | countdown each second |
+| MAX_DURATION | AHIZEYI / KAPATIN | yellow, solid | on | message already finalized (decision D9) |
+| SAVING | KAYDEDILIYOR | cyan, fast blink | on | header, fsync, close, re-open, verify |
+| SUCCESS | MESAJINIZ / KAYDEDILDI! | green, solid 2 s | on | count and manifest updated only now |
 | ERROR | KAYIT HATASI · KART HATASI · KART DOLU · SERVIS GEREKLI + hint | red, fast blink | on | min 3 s, until hang-up |
-| HANG_UP | LUTFEN AHIZEYI / YERINE KOYUN | off | on | cold boot or session end with the handset still up |
+| HANG_UP | AHIZEYI / KAPATIN | off | on | cold boot or session end with the handset still up |
 
 Rules from the spec, and where they are enforced:
 
@@ -116,7 +118,7 @@ flowchart LR
 |---|---|
 | No card / unreadable | KART HATASI. Nothing recorded. Back to sleep after hang-up; the next lift retries. |
 | Card full before a session | KART DOLU (needs ≥ 1 MB + 10 s of audio free). |
-| Card full during a message | The recorder truncates to the last complete chunk and verifies it. The message is kept and counted; the standby screen shows KART DOLMAK UZERE. |
+| Card full during a message | The recorder truncates to the last complete chunk and verifies it. The message is kept and counted; the standby count gets a `!` (e.g. `025!`). |
 | SD write error | KAYIT HATASI. The file stays marked; the next boot repairs it if possible. |
 | SD stops responding | The 5 s save deadline expires: error screen, then reboot. A watchdog panic after 10 s covers a fully stuck writer. The file is repaired on the next mount. |
 | Power cut while recording | The next boot repairs the header from the file length (≤ 5 s lost), or deletes it if shorter than `min_seconds`. |

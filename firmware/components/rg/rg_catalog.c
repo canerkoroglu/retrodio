@@ -103,6 +103,11 @@ bool rg_catalog_valid(void)
     return s_cache.magic == CACHE_MAGIC;
 }
 
+void rg_catalog_invalidate(void)
+{
+    s_cache.magic = 0;
+}
+
 void rg_catalog_get(rg_catalog_state_t *state)
 {
     state->count = s_cache.count;

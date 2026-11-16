@@ -46,3 +46,5 @@ esp_err_t rg_catalog_commit(uint32_t index, uint32_t data_bytes, uint32_t crc32)
 void rg_catalog_get(rg_catalog_state_t *state);
 /** True once rg_catalog_open() has succeeded since power-on (cache survives deep sleep). */
 bool rg_catalog_valid(void);
+/** Drop the deep-sleep cache so the next rg_catalog_open() rescans the folder. */
+void rg_catalog_invalidate(void);

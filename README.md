@@ -223,7 +223,7 @@ The test WAV files (`TEST_MIC.wav`, `TEST_DUPLEX.wav`, `TEST_SEQ.wav`) and the s
 2. **Card:** FAT32, greeting files and `config.txt` present, no test files, at least 2 GB free.
 3. **Power:** the 5 V ≥2 A **mains adapter** through the rear USB-C input only; no PC attached. Avoid power banks unless they have a low-current (always-on) mode, because standby draws only a few mA.
 4. **Standby:** the OLED shows the total count and the LED is off.
-5. **Test call:** lift the handset, hear the greeting and beep, speak 5 s, hang up. You should see "KAYIT BASARILI" and the count goes up by one.
+5. **Test call:** lift the handset, hear the greeting and beep, speak 5 s, hang up. You should see "MESAJINIZ KAYDEDILDI!" and the count at the top-left goes up by one.
 6. **Spare kit in the box:** pre-flashed Super Mini (guestbook build), second microSD card with greetings and `config.txt`, spare handset cord.
 7. **After the event:**
    1. Power off and remove the card.

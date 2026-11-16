@@ -130,12 +130,14 @@ void rg_oled_rect(int x, int y, int w, int h, bool fill)
     }
 }
 
+static const uint8_t *font(char c)
+{
+    return rg_font5x7[(c < 0x20 || c > 0x7E ? '?' : c) - 0x20];
+}
+
 static void glyph(int x, int y, char c, int scale)
 {
-    if (c < 0x20 || c > 0x7E) {
-        c = '?';
-    }
-    const uint8_t *g = rg_font5x7[c - 0x20];
+    const uint8_t *g = font(c);
     for (int col = 0; col < 5; col++) {
         for (int row = 0; row < 7; row++) {
             if (g[col] & (1U << row)) {
@@ -157,6 +159,26 @@ void rg_oled_text(int x, int y, const char *s, int scale)
     }
 }
 
+void rg_oled_text_vertical(int x, int y, const char *s, int scale)
+{
+    int bottom = y + rg_oled_text_width(s, scale) - 1;
+    for (int i = 0; s[i]; i++) {
+        const uint8_t *g = font(s[i]);
+        for (int col = 0; col < 5; col++) {
+            for (int row = 0; row < 7; row++) {
+                if (g[col] & (1U << row)) {
+                    for (int sy = 0; sy < scale; sy++) {
+                        for (int sx = 0; sx < scale; sx++) {
+                            rg_oled_pixel(x + row * scale + sx, bottom - (i * RG_FONT_ADVANCE + col) * scale - sy,
+                                          true);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 int rg_oled_text_width(const char *s, int scale)
 {
     int n = (int)strlen(s);
@@ -166,6 +188,22 @@ int rg_oled_text_width(const char *s, int scale)
 void rg_oled_text_center(int y, const char *s, int scale)
 {
     rg_oled_text((RG_OLED_WIDTH - rg_oled_text_width(s, scale)) / 2, y, s, scale);
+}
+
+void rg_oled_action_screen(const char *side, const char *top, const char *bottom, int reserve_right, int dx)
+{
+    const int left = 9; /* 7 px rotated label + 2 px gap */
+    const int span = RG_OLED_WIDTH - reserve_right - left;
+    if (side) {
+        rg_oled_text_vertical(1 + dx, 0, side, 1);
+    }
+    /* Capitals use 6 of the 7 font rows: 12 px per line at scale 2, centred in 32 px. */
+    if (top) {
+        rg_oled_text(left + (span - rg_oled_text_width(top, 2)) / 2 + dx, bottom ? 2 : 10, top, 2);
+    }
+    if (bottom) {
+        rg_oled_text(left + (span - rg_oled_text_width(bottom, 2)) / 2 + dx, 18, bottom, 2);
+    }
 }
 
 static esp_err_t flush_once(void)

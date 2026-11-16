@@ -56,20 +56,27 @@ tr_t t2_oled(void)
     printf("Showing the character set...\n");
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    /* The real UI screens (Turkish texts in ASCII). */
-    screen("AUDIO GUESTBOOK", "TOPLAM: 024", "AHIZEYI KALDIRIN", 0);
-    vTaskDelay(pdMS_TO_TICKS(2500));
-    screen(NULL, "HOS GELDINIZ", NULL, 0);
-    vTaskDelay(pdMS_TO_TICKS(1500));
-    screen("MESAJINIZI BIRAKIN", "03:00", NULL, 1);
-    vTaskDelay(pdMS_TO_TICKS(2500));
-    screen("SURE DOLDU", "LUTFEN AHIZEYI", "YERINE KOYUN", 0);
-    vTaskDelay(pdMS_TO_TICKS(2500));
-    screen(NULL, "KAYDEDILIYOR...", NULL, 0);
-    vTaskDelay(pdMS_TO_TICKS(1500));
-    screen("KAYIT BASARILI", "TOPLAM: 025", NULL, 0);
-    vTaskDelay(pdMS_TO_TICKS(2000));
-    screen(NULL, "KAYIT HATASI", NULL, 0);
+    /* The real UI screens (Turkish texts in ASCII), same layout as the guestbook. */
+    const struct {
+        const char *count, *top, *bottom;
+        uint32_t ms;
+    } SCREENS[] = {
+        {"024", "AHIZEYI", "KALDIRIN", 2500},      {"024", "KONUSMAYA", "BASLAYIN", 2500},
+        {"024", "AHIZEYI", "KAPATIN", 2000},       {"024", "KAYDEDILIYOR", NULL, 1500},
+        {"025", "MESAJINIZ", "KAYDEDILDI!", 2500},
+    };
+    for (size_t i = 0; i < sizeof(SCREENS) / sizeof(SCREENS[0]); i++) {
+        rg_oled_clear();
+        bool recording = i == 1;
+        if (recording) {
+            rg_oled_text(RG_OLED_WIDTH - rg_oled_text_width("02:59", 1), 0, "02:59", 1);
+        }
+        rg_oled_action_screen(SCREENS[i].count, SCREENS[i].top, SCREENS[i].bottom,
+                              recording ? rg_oled_text_width("02:59", 1) + 1 : 0, 0);
+        rg_oled_flush();
+        vTaskDelay(pdMS_TO_TICKS(SCREENS[i].ms));
+    }
+    screen("KAYIT HATASI", "TEKRAR DENEYIN", NULL, 0);
     vTaskDelay(pdMS_TO_TICKS(1500));
 
     printf("Contrast sweep 0x01 -> 0xFF...\n");

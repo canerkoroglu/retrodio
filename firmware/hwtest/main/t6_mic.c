@@ -102,12 +102,13 @@ tr_t t6_mic(void)
     int active = st[1].nonzero > st[0].nonzero ? 1 : 0;
     const char *slot_name[] = {"LEFT", "RIGHT"};
     int bits[2];
+    double noise_rms[2];
     for (int s = 0; s < 2; s++) {
         bits[s] = st[s].or_bits ? 32 - __builtin_ctz(st[s].or_bits) : 0;
         double mean = (double)st[s].sum / RG_SAMPLE_RATE_HZ;
-        double rms = sqrt(st[s].sumsq / RG_SAMPLE_RATE_HZ - mean * mean);
+        noise_rms[s] = sqrt(st[s].sumsq / RG_SAMPLE_RATE_HZ - mean * mean);
         printf("  %-5s slot: nonzero=%5lu valid_bits=%2d dc=%.0f noise_rms=%.1f dBFS\n", slot_name[s],
-               (unsigned long)st[s].nonzero, bits[s], mean, dbfs(rms));
+               (unsigned long)st[s].nonzero, bits[s], mean, dbfs(noise_rms[s]));
     }
     printf("Active slot: %s (expected LEFT with L/R tied to GND). Valid bits: %d (INMP441 = 24).\n", slot_name[active],
            bits[active]);
@@ -192,8 +193,7 @@ tr_t t6_mic(void)
     hw_result(6, r,
               "startup_ms=%ld slot=%s valid_bits=%d noise_dbfs=%.1f loudest_peak_dbfs=%.1f rx_overflows=%lu "
               "record=%s dropped=%lu gain_db=%d",
-              (long)startup_ms, slot_name[active], bits[active], dbfs(sqrt(st[active].sumsq / RG_SAMPLE_RATE_HZ)),
-              loudest_peak, (unsigned long)ovf, rg_err_name(rec_err), (unsigned long)rs.dropped_bytes,
-              g_settings.mic_gain_db);
+              (long)startup_ms, slot_name[active], bits[active], dbfs(noise_rms[active]), loudest_peak,
+              (unsigned long)ovf, rg_err_name(rec_err), (unsigned long)rs.dropped_bytes, g_settings.mic_gain_db);
     return r;
 }

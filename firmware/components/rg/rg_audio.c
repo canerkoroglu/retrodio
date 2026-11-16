@@ -53,6 +53,11 @@ esp_err_t rg_audio_open(rg_audio_dir_t dir, bool rx_stereo)
     chan.auto_clear_after_cb = true; /* TX sends zeros on underrun */
     rg_power_acquire();              /* amp + mic must be powered before their pins are driven */
     s_powered = true;
+    if (!tx) {
+        /* RX-only: hold amp DIN low so the powered amp never sees a floating input while BCLK/WS run. */
+        gpio_set_level(RG_PIN_I2S_DOUT, 0);
+        gpio_set_direction(RG_PIN_I2S_DOUT, GPIO_MODE_OUTPUT);
+    }
     esp_err_t err = i2s_new_channel(&chan, tx ? &s_tx : NULL, rx ? &s_rx : NULL);
     if (err != ESP_OK) {
         rg_audio_close();

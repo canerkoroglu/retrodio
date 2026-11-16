@@ -38,6 +38,9 @@ tr_t t4_hook(void)
         hw_result(4, TR_FAIL, "isr=%s", esp_err_to_name(err));
         return TR_FAIL;
     }
+    s_edges = 0;
+    s_first_us = 0;
+    s_last_us = 0;
     gpio_isr_handler_add(RG_PIN_HOOK, hook_isr, NULL);
 
     printf("Lift and replace the handset several times (%d s, any key ends).\n", TEST_SECONDS);

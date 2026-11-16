@@ -19,12 +19,13 @@ static void center(int y, const char *s, int scale, int dx)
     rg_oled_text((RG_OLED_WIDTH - rg_oled_text_width(s, scale)) / 2 + dx, y, s, scale);
 }
 
-static void total_text(char *buf, size_t len, const gb_ui_model_t *m)
+/* Message count for the rotated top-left label; '!' marks a card that is almost full. */
+static void count_text(char *buf, size_t len, const gb_ui_model_t *m)
 {
     if (m->total_known) {
-        snprintf(buf, len, "TOPLAM: %03lu", (unsigned long)m->total);
+        snprintf(buf, len, "%03lu%s", (unsigned long)m->total, m->low_space ? "!" : "");
     } else {
-        snprintf(buf, len, "TOPLAM: ---");
+        snprintf(buf, len, "---");
     }
 }
 
@@ -40,61 +41,44 @@ static void draw_error(const gb_ui_model_t *m)
 /* Returns false if the panel should be switched off instead (standby "off"). */
 static bool draw(const gb_ui_model_t *m)
 {
-    char line[26];
-    int dx = (int)(m->shift % 3) - 1; /* 1 px burn-in shift per session on static screens */
+    char count[16], line[8];
+    int dx = (int)(m->shift % 3) - 1; /* 1 px burn-in shift per session */
+    count_text(count, sizeof(count), m);
     rg_oled_clear();
     switch (m->screen) {
     case GB_UI_STANDBY:
         if (m->standby == RG_STANDBY_OFF) {
             return false;
         }
-        total_text(line, sizeof(line), m);
         if (m->standby == RG_STANDBY_FULL) {
-            center(0, "AUDIO GUESTBOOK", 1, dx);
-            center(12, line, 1, dx);
-            center(24, m->low_space ? "KART DOLMAK UZERE" : "AHIZEYI KALDIRIN", 1, dx);
+            rg_oled_action_screen(count, "AHIZEYI", "KALDIRIN", 0, dx);
         } else {
-            center(12 + dx, line, 1, dx);
-            if (m->low_space) {
-                center(24, "KART DOLMAK UZERE", 1, dx);
-            }
+            rg_oled_action_screen(count, NULL, NULL, 0, dx);
         }
         break;
     case GB_UI_WAKING:
-        center(12, "HAZIRLANIYOR...", 1, 0);
-        break;
     case GB_UI_GREETING:
-        center(9, "HOS GELDINIZ", 2, 0);
-        break;
-    case GB_UI_INSTRUCTION:
-        center(6, "SINYAL SESINDEN", 1, 0);
-        center(18, "SONRA KONUSUN", 1, 0);
+    case GB_UI_INSTRUCTION: /* the guest is listening: the standby prompt stays until the beep */
+        rg_oled_action_screen(count, "AHIZEYI", "KALDIRIN", 0, dx);
         break;
     case GB_UI_RECORDING:
-        center(0, "MESAJINIZI BIRAKIN", 1, 0);
-        snprintf(line, sizeof(line), "%02lu:%02lu", (unsigned long)(m->seconds_left / 60),
+        snprintf(line, sizeof(line), "%02lu:%02lu", (unsigned long)(m->seconds_left / 60 % 100),
                  (unsigned long)(m->seconds_left % 60));
-        center(13, line, 2, 0);
+        rg_oled_text(RG_OLED_WIDTH - rg_oled_text_width(line, 1), 0, line, 1);
+        rg_oled_action_screen(count, "KONUSMAYA", "BASLAYIN", rg_oled_text_width(line, 1) + 1, dx);
         break;
     case GB_UI_MAX_DURATION:
-        center(0, "SURE DOLDU", 1, 0);
-        center(12, "LUTFEN AHIZEYI", 1, 0);
-        center(24, "YERINE KOYUN", 1, 0);
+    case GB_UI_HANG_UP:
+        rg_oled_action_screen(count, "AHIZEYI", "KAPATIN", 0, dx);
         break;
     case GB_UI_SAVING:
-        center(12, "KAYDEDILIYOR...", 1, 0);
+        rg_oled_action_screen(count, "KAYDEDILIYOR", NULL, 0, dx);
         break;
     case GB_UI_SUCCESS:
-        total_text(line, sizeof(line), m);
-        center(4, "KAYIT BASARILI", 1, 0);
-        center(18, line, 1, 0);
+        rg_oled_action_screen(count, "MESAJINIZ", "KAYDEDILDI!", 0, dx);
         break;
     case GB_UI_ERROR:
         draw_error(m);
-        break;
-    case GB_UI_HANG_UP:
-        center(6, "LUTFEN AHIZEYI", 1, 0);
-        center(18, "YERINE KOYUN", 1, 0);
         break;
     }
     return true;

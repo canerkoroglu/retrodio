@@ -110,11 +110,9 @@ tr_t t5_sd(void)
         max_write_us = dt > max_write_us ? dt : max_write_us;
         bucket_add(hist, dt);
     }
-    if (io_ok && (fsync(fd) != 0 || close(fd) != 0)) {
-        io_ok = false;
-    } else if (!io_ok) {
-        close(fd);
-    }
+    bool closed_ok = !io_ok || fsync(fd) == 0;
+    closed_ok = close(fd) == 0 && closed_ok;
+    io_ok = io_ok && closed_ok;
     uint32_t elapsed_ms = (uint32_t)((esp_timer_get_time() - start) / 1000);
     uint32_t write_kbps = elapsed_ms ? (uint32_t)((uint64_t)TOTAL_BYTES * 1000 / elapsed_ms / 1024) : 0;
 

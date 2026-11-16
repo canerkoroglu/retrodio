@@ -1,8 +1,9 @@
 /*
  * T1: chip info + external bias resistor check.
- * Each pin is driven to one level, released (input, no internal pulls) and read 50 us later.
- * A resistor to the opposite rail pulls the pin over within a few RC time constants;
+ * Each pin is driven to one level, released (input, no internal pulls) and read after a per-pin
+ * settle time. A resistor to the opposite rail pulls the pin over within a few RC time constants;
  * a floating pin keeps its charge. This detects 10k..100k pull resistors without extra hardware.
+ * HOOK carries a 100 nF debounce cap (10k * 100 nF = 1 ms), so it is driven and settled for >= 5 tau.
  */
 #include <stdio.h>
 #include "hwtest.h"
@@ -20,21 +21,21 @@
 typedef enum { BIAS_FLOAT, BIAS_UP, BIAS_DOWN, BIAS_DRIVEN } bias_t;
 static const char *const BIAS_NAMES[] = {"floating", "pull-up", "pull-down", "driven/unclear"};
 
-static int release_and_read(gpio_num_t pin, int level)
+static int release_and_read(gpio_num_t pin, int level, uint32_t drive_us, uint32_t settle_us)
 {
     gpio_set_level(pin, level);
     gpio_set_direction(pin, GPIO_MODE_INPUT_OUTPUT);
-    esp_rom_delay_us(20);
+    esp_rom_delay_us(drive_us);
     gpio_set_direction(pin, GPIO_MODE_INPUT);
-    esp_rom_delay_us(50);
+    esp_rom_delay_us(settle_us);
     return gpio_get_level(pin);
 }
 
-static bias_t probe(gpio_num_t pin)
+static bias_t probe(gpio_num_t pin, uint32_t drive_us, uint32_t settle_us)
 {
     rg_board_pin_float(pin);
-    bool up = release_and_read(pin, 0) == 1;
-    bool down = release_and_read(pin, 1) == 0;
+    bool up = release_and_read(pin, 0, drive_us, settle_us) == 1;
+    bool down = release_and_read(pin, 1, drive_us, settle_us) == 0;
     rg_board_pin_float(pin);
     if (up && !down) {
         return BIAS_UP;
@@ -50,6 +51,8 @@ typedef struct {
     const char *signal;
     bias_t expect; /* BIAS_DRIVEN = informational only */
     const char *fix;
+    uint32_t drive_us;  /* drive time before release */
+    uint32_t settle_us; /* release -> read; >= 5 RC time constants of the expected bias */
 } pin_check_t;
 
 tr_t t1_board(void)
@@ -67,26 +70,26 @@ tr_t t1_board(void)
     printf("Hook: handset %s. Run this test with the handset ON the cradle.\n", lifted ? "LIFTED" : "down");
 
     const pin_check_t checks[] = {
-        {RG_PIN_I2S_BCLK, "I2S BCLK", BIAS_DOWN, "fit 100k BCLK->GND"},
-        {RG_PIN_I2S_WS, "I2S WS", BIAS_DOWN, "fit 100k WS->GND"},
-        {RG_PIN_SD_CS, "SD CS (strap)", BIAS_UP, "fit 100k CS->3V3"},
-        {RG_PIN_HOOK, "HOOK", lifted ? BIAS_DOWN : BIAS_UP, "fit 10k HOOK->3V3; check COM->GND, NC->GPIO"},
-        {RG_PIN_I2S_DIN, "Mic SD", BIAS_DOWN, "fit 100k mic SD->GND"},
-        {RG_PIN_LED, "LED data", BIAS_DOWN, "fit 10k shifter input->GND"},
-        {RG_PIN_I2C_SDA, "I2C SDA (strap)", BIAS_UP, "fit 4.7k SDA->3V3"},
-        {RG_PIN_I2C_SCL, "I2C SCL (strap)", BIAS_UP, "fit 4.7k SCL->3V3"},
-        {RG_PIN_PWR_EN, "PWR_EN", BIAS_DOWN, "fit 100k PWR_EN (N-FET gate)->GND"},
-        {RG_PIN_SD_SCK, "SD SCK", BIAS_DRIVEN, NULL},
-        {RG_PIN_I2S_DOUT, "Amp DIN", BIAS_DRIVEN, NULL},
-        {RG_PIN_SD_MISO, "SD MISO", BIAS_DRIVEN, NULL},
-        {RG_PIN_SD_MOSI, "SD MOSI", BIAS_DRIVEN, NULL},
+        {RG_PIN_I2S_BCLK, "I2S BCLK", BIAS_DOWN, "fit 100k BCLK->GND", 20, 50},
+        {RG_PIN_I2S_WS, "I2S WS", BIAS_DOWN, "fit 100k WS->GND", 20, 50},
+        {RG_PIN_SD_CS, "SD CS (strap)", BIAS_UP, "fit 100k CS->3V3", 20, 50},
+        {RG_PIN_HOOK, "HOOK", lifted ? BIAS_DOWN : BIAS_UP, "fit 10k HOOK->3V3; check COM->GND, NC->GPIO", 2000, 5000},
+        {RG_PIN_I2S_DIN, "Mic SD", BIAS_DOWN, "fit 100k mic SD->GND", 20, 50},
+        {RG_PIN_LED, "LED data", BIAS_DOWN, "fit 10k shifter input->GND", 20, 50},
+        {RG_PIN_I2C_SDA, "I2C SDA (strap)", BIAS_UP, "fit 4.7k SDA->3V3", 20, 50},
+        {RG_PIN_I2C_SCL, "I2C SCL (strap)", BIAS_UP, "fit 4.7k SCL->3V3", 20, 50},
+        {RG_PIN_PWR_EN, "PWR_EN", BIAS_DOWN, "fit 100k PWR_EN (N-FET gate)->GND", 20, 50},
+        {RG_PIN_SD_SCK, "SD SCK", BIAS_DRIVEN, NULL, 20, 50},
+        {RG_PIN_I2S_DOUT, "Amp DIN", BIAS_DRIVEN, NULL, 20, 50},
+        {RG_PIN_SD_MISO, "SD MISO", BIAS_DRIVEN, NULL, 20, 50},
+        {RG_PIN_SD_MOSI, "SD MOSI", BIAS_DRIVEN, NULL, 20, 50},
     };
 
     int failures = 0;
     printf("\n GPIO  signal            measured        expected\n");
     for (size_t i = 0; i < sizeof(checks) / sizeof(checks[0]); i++) {
         const pin_check_t *c = &checks[i];
-        bias_t got = probe(c->pin);
+        bias_t got = probe(c->pin, c->drive_us, c->settle_us);
         bool info = c->expect == BIAS_DRIVEN;
         bool ok = info || got == c->expect;
         failures += !ok;

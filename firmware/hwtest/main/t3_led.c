@@ -27,7 +27,7 @@ tr_t t3_led(void)
         {"ERROR       red, fast blink", RG_LED_BLINK_FAST, RG_RGB_RED},
         {"WHITE       solid (colour balance check)", RG_LED_SOLID, RG_RGB_WHITE},
     };
-    printf("Brightness cap: %d/255\n", CONFIG_RG_LED_MAX_BRIGHTNESS);
+    printf("Brightness cap: %d/255\n", g_settings.led_brightness);
     for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
         printf("  %s\n", steps[i].state);
         hw_oled_status("LED TEST", steps[i].state);
@@ -41,6 +41,6 @@ tr_t t3_led(void)
     bool comfy = hw_ask_yes("Was the brightness comfortable (not glaring) indoors?");
     tr_t r = colors_ok && off_ok && err == ESP_OK ? TR_PASS : TR_FAIL;
     hw_result(3, r, "colors=%s off=%s brightness_ok=%s cap=%d", colors_ok ? "yes" : "no", off_ok ? "yes" : "no",
-              comfy ? "yes" : "no", CONFIG_RG_LED_MAX_BRIGHTNESS);
+              comfy ? "yes" : "no", g_settings.led_brightness);
     return r;
 }
