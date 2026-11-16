@@ -51,6 +51,13 @@ static void touch(void)
     s_last_req_ms = t ? t : 1;
 }
 
+/* Every request is logged (serial console): the first thing to check when the page misbehaves. */
+static void seen(httpd_req_t *r)
+{
+    touch();
+    ESP_LOGI(TAG, "%s %s", r->method == HTTP_POST ? "POST" : "GET", r->uri);
+}
+
 static void msg_path(uint32_t index, char *path, size_t len)
 {
     char name[24];
@@ -165,7 +172,7 @@ static esp_err_t send_json(httpd_req_t *r, const char *json)
 
 static esp_err_t h_index(httpd_req_t *r)
 {
-    touch();
+    seen(r);
     httpd_resp_set_type(r, "text/html; charset=utf-8");
     return httpd_resp_send(r, PAGE, sizeof(PAGE) - 1);
 }
@@ -184,7 +191,7 @@ static int newest_first(const void *a, const void *b)
 /* [[index, duration_ms], ...], newest first. */
 static esp_err_t h_list(httpd_req_t *r)
 {
-    touch();
+    seen(r);
     size_t cap = 64, n = 0;
     item_t *items = malloc(cap * sizeof(*items));
     char *out = malloc(LIST_CHUNK);
@@ -266,7 +273,7 @@ static bool query_index(httpd_req_t *r, uint32_t *index)
 
 static esp_err_t h_play(httpd_req_t *r)
 {
-    touch();
+    seen(r);
     uint32_t index;
     if (!query_index(r, &index)) {
         return httpd_resp_send_err(r, HTTPD_400_BAD_REQUEST, "n");
@@ -283,7 +290,7 @@ static esp_err_t h_play(httpd_req_t *r)
 
 static esp_err_t h_stop(httpd_req_t *r)
 {
-    touch();
+    seen(r);
     xQueueReset(s_play_q);
     s_stop = true;
     return send_json(r, "{\"ok\":true}");
@@ -291,7 +298,7 @@ static esp_err_t h_stop(httpd_req_t *r)
 
 static esp_err_t h_status(httpd_req_t *r)
 {
-    touch();
+    touch(); /* polled every second: not logged */
     uint32_t playing = s_playing, len = s_play_len_ms;
     uint32_t pos = playing ? now_ms() - s_play_start_ms : 0;
     char buf[80];
@@ -302,7 +309,7 @@ static esp_err_t h_status(httpd_req_t *r)
 
 static esp_err_t h_exit(httpd_req_t *r)
 {
-    touch();
+    seen(r);
     s_exit = true;
     return send_json(r, "{\"ok\":true}");
 }
@@ -310,7 +317,7 @@ static esp_err_t h_exit(httpd_req_t *r)
 /* /rec/MSG_000012.wav: the file as stored on the card. */
 static esp_err_t h_file(httpd_req_t *r)
 {
-    touch();
+    seen(r);
     char name[24];
     const char *p = r->uri + strlen("/rec/");
     size_t len = strcspn(p, "?");
@@ -353,18 +360,31 @@ static esp_err_t h_file(httpd_req_t *r)
     return err;
 }
 
+/* Unknown paths (phones probe e.g. /generate_204 or /hotspot-detect.html): log and send to the page. */
+static esp_err_t h_not_found(httpd_req_t *r, httpd_err_code_t err)
+{
+    (void)err;
+    seen(r);
+    httpd_resp_set_status(r, "302 Found");
+    httpd_resp_set_hdr(r, "Location", "http://192.168.4.1/");
+    return httpd_resp_send(r, NULL, 0);
+}
+
 /* ---------------------------------------------------------------- Wi-Fi */
 
 static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     (void)arg;
     (void)base;
-    (void)data;
     if (id == WIFI_EVENT_AP_STACONNECTED) {
+        const wifi_event_ap_staconnected_t *e = data;
         s_clients++;
         touch();
-    } else if (id == WIFI_EVENT_AP_STADISCONNECTED && s_clients) {
-        s_clients--;
+        ESP_LOGI(TAG, "phone joined (aid %d), %lu connected", e->aid, (unsigned long)s_clients);
+    } else if (id == WIFI_EVENT_AP_STADISCONNECTED) {
+        const wifi_event_ap_stadisconnected_t *e = data;
+        s_clients -= s_clients ? 1 : 0;
+        ESP_LOGI(TAG, "phone left (aid %d, reason %d), %lu connected", e->aid, e->reason, (unsigned long)s_clients);
     }
 }
 
@@ -419,6 +439,7 @@ static esp_err_t start_http(void)
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
         ESP_RETURN_ON_ERROR(httpd_register_uri_handler(s_httpd, &uris[i]), TAG, "uri %s", uris[i].uri);
     }
+    ESP_RETURN_ON_ERROR(httpd_register_err_handler(s_httpd, HTTPD_404_NOT_FOUND, h_not_found), TAG, "404");
     return ESP_OK;
 }
 

@@ -34,18 +34,18 @@ static esp_err_t cmds(const uint8_t *c, size_t n)
 
 static esp_err_t configure(bool warm)
 {
-    // 128x32 SSD1306 configuration. Every command is idempotent and leaves GDDRAM intact,
+    // 128x64 SSD1306 configuration. Every command is idempotent and leaves GDDRAM intact,
     // so a warm init can run while the panel keeps showing its retained image.
     const uint8_t seq[] = {
         0xD5, 0x80,       // clock divide / oscillator
-        0xA8, 0x1F,       // multiplex 32
+        0xA8, 0x3F,       // multiplex 64
         0xD3, 0x00,       // display offset
         0x40,             // start line 0
         0x8D, 0x14,       // charge pump on
         0x20, 0x00,       // horizontal addressing
         0xA1,             // segment remap
         0xC8,             // COM scan descending
-        0xDA, 0x02,       // COM pins for 128x32
+        0xDA, 0x12,       // COM pins: alternative, no remap (128x64)
         0x81, s_contrast, // contrast (config.txt oled_contrast)
         0xD9, 0xF1,       // pre-charge
         0xDB, 0x40,       // VCOMH
@@ -159,31 +159,6 @@ void rg_oled_text(int x, int y, const char *s, int scale)
     }
 }
 
-void rg_oled_text_vertical_xy(int x, int y, const char *s, int scale_x, int scale_y)
-{
-    int bottom = y + rg_oled_text_width(s, scale_y) - 1;
-    for (int i = 0; s[i]; i++) {
-        const uint8_t *g = font(s[i]);
-        for (int col = 0; col < 5; col++) {
-            for (int row = 0; row < 7; row++) {
-                if (g[col] & (1U << row)) {
-                    for (int sy = 0; sy < scale_y; sy++) {
-                        for (int sx = 0; sx < scale_x; sx++) {
-                            rg_oled_pixel(x + row * scale_x + sx, bottom - (i * RG_FONT_ADVANCE + col) * scale_y - sy,
-                                          true);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-void rg_oled_text_vertical(int x, int y, const char *s, int scale)
-{
-    rg_oled_text_vertical_xy(x, y, s, scale, scale);
-}
-
 int rg_oled_text_width(const char *s, int scale)
 {
     int n = (int)strlen(s);
@@ -195,26 +170,150 @@ void rg_oled_text_center(int y, const char *s, int scale)
     rg_oled_text((RG_OLED_WIDTH - rg_oled_text_width(s, scale)) / 2, y, s, scale);
 }
 
-void rg_oled_action_screen(const char *side, const char *top, const char *bottom, int reserve_right, int dx)
+/* ---- Bitmap fonts (rg_fonts.c, Rubik Bold) ---- */
+
+/* Decode one UTF-8 character and advance *p; malformed input yields '?'. */
+static uint32_t utf8_next(const char **p)
 {
-    const int left = RG_OLED_SIDE_WIDTH;
-    const int span = RG_OLED_WIDTH - left;
-    if (side) {
-        /* Up to three characters: 2x along the text (28 px of the 32 px height) and 3x across it,
-         * so the digits read 21 px tall. Longer labels (025!, 1000) drop to 1x along, 2x across. */
-        bool big = rg_oled_text_width(side, 2) <= RG_OLED_HEIGHT;
-        int along = big ? 2 : 1;
-        int h = rg_oled_text_width(side, along);
-        rg_oled_text_vertical_xy(1 + dx, (RG_OLED_HEIGHT - h) / 2, side, big ? 3 : 2, along);
+    const uint8_t *s = (const uint8_t *)*p;
+    uint32_t c = s[0];
+    int extra = c < 0x80 ? 0 : (c & 0xE0) == 0xC0 ? 1 : (c & 0xF0) == 0xE0 ? 2 : -1;
+    if (extra <= 0) {
+        (*p)++;
+        return extra < 0 ? '?' : c;
     }
-    /* Capitals use 6 of the 7 font rows: 12 px per line at scale 2, centred in 32 px. The reserved
-     * corner (e.g. the countdown) sits bottom-right, so only the bottom line gives it room. */
-    if (top) {
-        rg_oled_text(left + (span - rg_oled_text_width(top, 2)) / 2 + dx, bottom ? 2 : 10, top, 2);
+    c &= extra == 1 ? 0x1F : 0x0F;
+    for (int i = 1; i <= extra; i++) {
+        if ((s[i] & 0xC0) != 0x80) {
+            *p += i;
+            return '?';
+        }
+        c = (c << 6) | (s[i] & 0x3F);
     }
-    if (bottom) {
-        int bspan = span - reserve_right;
-        rg_oled_text(left + (bspan - rg_oled_text_width(bottom, 2)) / 2 + dx, 18, bottom, 2);
+    *p += extra + 1;
+    return c;
+}
+
+/* Glyphs are sorted by code point. Missing characters draw as '?' (or nothing if the font has no '?'). */
+static const rg_glyph_t *find_glyph(const rg_font_t *f, uint32_t cp)
+{
+    int lo = 0, hi = f->count - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (f->glyphs[mid].cp == cp) {
+            return &f->glyphs[mid];
+        }
+        if (f->glyphs[mid].cp < cp) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return cp == '?' ? NULL : find_glyph(f, '?');
+}
+
+/* Ink extent of s, relative to a pen starting at 0. */
+static void extent(const rg_font_t *f, const char *s, int *left, int *right)
+{
+    int pen = 0;
+    bool any = false;
+    *left = *right = 0;
+    while (*s) {
+        const rg_glyph_t *g = find_glyph(f, utf8_next(&s));
+        if (!g) {
+            continue;
+        }
+        if (g->w) {
+            int l = pen + g->x0, r = l + g->w;
+            *left = any && *left < l ? *left : l;
+            *right = any && *right > r ? *right : r;
+            any = true;
+        }
+        pen += g->adv;
+    }
+}
+
+int rg_oled_font_width(const rg_font_t *f, const char *s)
+{
+    int l, r;
+    extent(f, s, &l, &r);
+    return r - l;
+}
+
+void rg_oled_font_text(const rg_font_t *f, int x, int baseline, const char *s)
+{
+    int l, r;
+    extent(f, s, &l, &r);
+    int pen = x - l;
+    const int top = baseline - f->ascent;
+    while (*s) {
+        const rg_glyph_t *g = find_glyph(f, utf8_next(&s));
+        if (!g) {
+            continue;
+        }
+        for (int c = 0; c < g->w; c++) {
+            uint32_t m = f->cols[g->off + c];
+            for (int y = 0; m; y++, m >>= 1) {
+                if (m & 1) {
+                    rg_oled_pixel(pen + g->x0 + c, top + y, true);
+                }
+            }
+        }
+        pen += g->adv;
+    }
+}
+
+void rg_oled_font_text_center(const rg_font_t *f, int baseline, const char *s, int dx)
+{
+    rg_oled_font_text(f, (RG_OLED_WIDTH - rg_oled_font_width(f, s)) / 2 + dx, baseline, s);
+}
+
+/* ---- Guestbook screen layout (128x64) ---- */
+
+void rg_oled_action_screen(const char *count, const char *caption, const char *timer, const char *top,
+                           const char *bottom, int dx)
+{
+    int count_end = 1 + dx;
+    if (count) {
+        rg_oled_font_text(&rg_font_count, 1 + dx, RG_LAYOUT_COUNT_BASE, count);
+        count_end += rg_oled_font_width(&rg_font_count, count);
+    }
+    if (timer) {
+        /* Large countdown at the top-right; the small font if a 4-digit count leaves no room. */
+        const rg_font_t *tf = &rg_font_mid;
+        int base = RG_LAYOUT_COUNT_BASE;
+        if (RG_OLED_WIDTH - 1 - rg_oled_font_width(tf, timer) < count_end + 4) {
+            tf = &rg_font_small;
+            base = RG_LAYOUT_CAPTION_BASE;
+        }
+        int x = RG_OLED_WIDTH - 1 - rg_oled_font_width(tf, timer);
+        if (x >= count_end + 4) {
+            rg_oled_font_text(tf, x, base, timer);
+        }
+    } else if (caption) {
+        /* Beside the count, centred on it: one line in the title font, or two ('\n') in the small
+         * font. A line that does not fit is left out. */
+        const bool two = strchr(caption, '\n') != NULL;
+        const rg_font_t *cf = two ? &rg_font_small : &rg_font_head;
+        for (int k = 0; k < 2 && *caption; k++) {
+            char line[32];
+            size_t n = strcspn(caption, "\n");
+            n = n < sizeof(line) - 1 ? n : sizeof(line) - 1;
+            memcpy(line, caption, n);
+            line[n] = 0;
+            caption += strcspn(caption, "\n");
+            caption += *caption == '\n';
+            int x = count_end + 6;
+            if (x + rg_oled_font_width(cf, line) <= RG_OLED_WIDTH) {
+                rg_oled_font_text(cf, x, two ? RG_LAYOUT_CAPTION2_BASE + 11 * k : RG_LAYOUT_CAPTION_BASE, line);
+            }
+        }
+    }
+    if (top && bottom) {
+        rg_oled_font_text_center(&rg_font_big, RG_LAYOUT_LINE1_BASE, top, dx);
+        rg_oled_font_text_center(&rg_font_big, RG_LAYOUT_LINE2_BASE, bottom, dx);
+    } else if (top) {
+        rg_oled_font_text_center(&rg_font_big, RG_LAYOUT_SINGLE_BASE, top, dx);
     }
 }
 

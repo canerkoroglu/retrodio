@@ -7,7 +7,7 @@ An offline wedding/event audio guestbook built into a 3D-printed rotary telephon
 | Controller | ESP32-C3 Super Mini |
 | Audio | I²S MEMS microphone, MAX98357A I²S amplifier |
 | Storage | microSD (SPI, 5 V module) |
-| UI | SSD1306 128×32 OLED, WS2812B LED |
+| UI | SSD1306 128×64 OLED (0.96"), WS2812B LED |
 | Wake | mechanical hook switch on GPIO3 (deep-sleep wake) |
 | Recording format | 16 kHz, mono, 16-bit PCM WAV, maximum 180 s |
 | Firmware | ESP-IDF v6.1.1 (C) |
@@ -224,7 +224,7 @@ The test WAV files (`TEST_MIC.wav`, `TEST_DUPLEX.wav`, `TEST_SEQ.wav`) and the s
 2. **Card:** FAT32, greeting files and `config.txt` present, no test files, at least 2 GB free.
 3. **Power:** the 5 V ≥2 A **mains adapter** through the rear USB-C input only; no PC attached. Avoid power banks unless they have a low-current (always-on) mode, because standby draws only a few mA.
 4. **Standby:** the OLED shows the total count and the LED is off.
-5. **Test call:** lift the handset, hear the greeting and beep, speak 5 s, hang up. You should see "MESAJINIZ KAYDEDILDI" and the large count on the left goes up by one.
+5. **Test call:** lift the handset, hear the greeting and beep, speak 5 s, hang up. You should see "MESAJINIZ KAYDEDİLDİ" and the large count at the top-left goes up by one.
 6. **Spare kit in the box:** pre-flashed Super Mini (guestbook build), second microSD card with greetings and `config.txt`, spare handset cord.
 7. **After the event:**
    1. Power off and remove the card.
@@ -247,7 +247,7 @@ Play the messages back through the handset from a phone, without taking the card
   SSID = AgAdiniz
   PASSWORD = parolaniz
   ```
-  The password is required, 8–63 characters (WPA2). Without a usable file the OLED shows WIFI AYARI YOK; invalid lines are reported in `log.txt`. `sdcard/audio/wifi.txt` is git-ignored, so a local copy with real values never reaches the repository. An optional fallback can be set in menuconfig (`GB_WIFI_SSID` / `GB_WIFI_PASSWORD`); it lives only in the git-ignored `sdkconfig`.
+  The password is required, 8–63 characters (WPA2). Without a usable file the OLED shows WIFI.TXT YOK; invalid lines are reported in `log.txt`. `sdcard/audio/wifi.txt` is git-ignored, so a local copy with real values never reaches the repository. An optional fallback can be set in menuconfig (`GB_WIFI_SSID` / `GB_WIFI_PASSWORD`); it lives only in the git-ignored `sdkconfig`.
 - **Not a guest feature:** a guest lifting the handset never starts it, and neither does a crash or watchdog reset.
 
 ## Troubleshooting
@@ -263,6 +263,6 @@ Play the messages back through the handset from a phone, without taking the card
 | Boot banner says `SAFE MODE` | 3 crashes in a row: read the dump (`idf.py coredump-info`), check `/audio/log.txt`, try a fresh card |
 | Menu prints `Peripheral rail: ON (leak!)` | A module kept the rail on after a test; report the test number |
 | Phone switches off on a power bank | Standby current is below the bank's auto-off threshold: use the mains adapter or a bank with a low-current mode |
-| Listening mode does not start | The handset must be lifted *before* power-on / RESET; after a crash it shows AHIZEYI KAPATIN instead. Check `log.txt` for `listening mode` lines |
+| Listening mode does not start | The handset must be lifted *before* power-on / RESET; after a crash it shows AHİZEYİ KAPATIN instead. Check `log.txt` for `listening mode` lines |
 | Phone cannot find or keeps losing the network | Stay within a few metres; Super Mini antennas are weak. Try `GB_WIFI_TX_POWER_QDBM` between 34 and 60, or another `GB_WIFI_CHANNEL` |
-| Wrong network name / password, or WIFI AYARI YOK | Check `/audio/wifi.txt` (`SSID`, `PASSWORD` 8–63 characters); `log.txt` lists rejected lines |
+| Wrong network name / password, or WIFI.TXT YOK | Check `/audio/wifi.txt` (`SSID`, `PASSWORD` 8–63 characters); `log.txt` lists rejected lines |

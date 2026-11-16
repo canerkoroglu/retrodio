@@ -3,14 +3,23 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "esp_err.h"
+#include "rg_fonts.h"
 
+/* 0.96" SSD1306, 128x64, I2C. */
 #define RG_OLED_WIDTH   128
-#define RG_OLED_HEIGHT  32
-#define RG_FONT_ADVANCE 5 /* glyph cells include a blank column; 25 characters per line at scale 1 */
+#define RG_OLED_HEIGHT  64
+#define RG_FONT_ADVANCE 5 /* 5x7 font: glyph cells include a blank column; 25 characters per line at scale 1 */
 #define RG_FONT_HEIGHT  8
-/* Left column of rg_oled_action_screen(): 1 px margin, 21 px label (3x across), 1 px burn-in
- * shift, 2 px gap. Leaves 103 px, i.e. 10 characters per line at scale 2. */
-#define RG_OLED_SIDE_WIDTH 25
+
+/* Baselines of rg_oled_action_screen(). Top: the count (18 px digits) with a caption or the
+ * countdown beside it. Below: one or two action lines in rg_font_big (13 px capitals); its 22 px
+ * glyph box also holds the dot of İ above and the cedilla of Ç/Ş below. */
+#define RG_LAYOUT_COUNT_BASE    19
+#define RG_LAYOUT_CAPTION_BASE  15 /* one caption line (rg_font_head), centred on the count */
+#define RG_LAYOUT_CAPTION2_BASE 9  /* two caption lines (rg_font_small), 11 px apart, centred */
+#define RG_LAYOUT_LINE1_BASE    40
+#define RG_LAYOUT_LINE2_BASE    59
+#define RG_LAYOUT_SINGLE_BASE   50
 
 /**
  * Initialise I2C and the SSD1306.
@@ -25,26 +34,29 @@ bool rg_oled_present(void);
 void rg_oled_clear(void);
 void rg_oled_pixel(int x, int y, bool on);
 void rg_oled_rect(int x, int y, int w, int h, bool fill);
-/** Draw ASCII text; characters outside 0x20-0x7E render as '?'. scale is 1 or 2. */
+/** 5x7 ASCII font (diagnostics); characters outside 0x20-0x7E render as '?'. scale is 1 or 2. */
 void rg_oled_text(int x, int y, const char *s, int scale);
 void rg_oled_text_center(int y, const char *s, int scale);
 int rg_oled_text_width(const char *s, int scale);
-/** Text rotated 90 degrees counter-clockwise (reads bottom to top). (x, y) is the top-left of a
- *  box 7*scale wide and rg_oled_text_width(s, scale) tall. */
-void rg_oled_text_vertical(int x, int y, const char *s, int scale);
-/** Rotated text with separate scales: scale_x across the text (glyph height when read), scale_y
- *  along it. The box is 7*scale_x wide and rg_oled_text_width(s, scale_y) tall. */
-void rg_oled_text_vertical_xy(int x, int y, const char *s, int scale_x, int scale_y);
-/**
- * Guestbook screen layout: `side` (e.g. the message count) rotated in the left column, vertically
- * centred (21 px tall digits for up to 3 characters, smaller beyond), then one or two lines at
- * scale 2 (up to 10 characters each), centred right of the column. `reserve_right` pixels are kept
- * free at the bottom-right corner (bottom line only). `dx` shifts everything by a pixel against
- * burn-in. NULL skips a part.
- */
-void rg_oled_action_screen(const char *side, const char *top, const char *bottom, int reserve_right, int dx);
 
-/** Push the frame buffer to the panel (~13 ms at 400 kHz). */
+/** UTF-8 text in a bitmap font (rg_fonts.h). x is the left ink edge; characters the font lacks
+ *  draw as '?'. */
+void rg_oled_font_text(const rg_font_t *f, int x, int baseline, const char *s);
+void rg_oled_font_text_center(const rg_font_t *f, int baseline, const char *s, int dx);
+int rg_oled_font_width(const rg_font_t *f, const char *s);
+
+/**
+ * Guestbook screen layout. Top-left: `count` (the message count) in 18 px digits. Beside it,
+ * either `timer` (countdown, top-right, large) or `caption`, vertically centred on the count:
+ * one line in rg_font_head, or two lines split at '\n' in rg_font_small; a line that does not
+ * fit is left out. Bottom half: `top` and `bottom` centred in the
+ * large font, or `top` alone on one centred line. Strings are UTF-8 (Turkish letters included).
+ * `dx` shifts everything by a pixel against burn-in. NULL skips a part.
+ */
+void rg_oled_action_screen(const char *count, const char *caption, const char *timer, const char *top,
+                           const char *bottom, int dx);
+
+/** Push the frame buffer to the panel (~26 ms for 1 KB at 400 kHz). */
 esp_err_t rg_oled_flush(void);
 esp_err_t rg_oled_set_contrast(uint8_t contrast);
 esp_err_t rg_oled_display_on(bool on);

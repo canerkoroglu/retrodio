@@ -46,12 +46,12 @@ static void render_standby(void)
     }
     char count[8];
     int shift = (int)(s_wakes % 3) - 1;
-    snprintf(count, sizeof(count), "%03lu", (unsigned long)(s_wakes % 1000));
+    snprintf(count, sizeof(count), "#%03lu", (unsigned long)(s_wakes % 1000));
     rg_oled_clear();
     if (s_screen == RG_STANDBY_FULL) {
-        rg_oled_action_screen(count, "AHIZEYI", "KALDIRIN", 0, shift);
+        rg_oled_action_screen(count, "MESAJ", NULL, "AHİZEYİ", "KALDIRIN", shift);
     } else {
-        rg_oled_action_screen(count, NULL, NULL, 0, shift);
+        rg_oled_action_screen(count, NULL, NULL, NULL, NULL, shift);
     }
     rg_oled_flush();
 }

@@ -381,7 +381,7 @@ static void enter(fsm_t *f, state_t st)
         break;
     case ST_WIFI:
         if (!start_wifi(f)) {
-            f->error = GB_UI_ERR_WIFI; /* WIFI AYARI YOK: shown until the handset is down */
+            f->error = GB_UI_ERR_WIFI; /* WIFI.TXT YOK: shown until the handset is down */
             f->reboot_after_error = false;
             enter(f, ST_ERROR);
             break;
@@ -540,7 +540,8 @@ static void step(fsm_t *f, const gb_audio_event_t *ev, bool hook_changed, int64_
         break;
 
     case ST_SUCCESS:
-        if (ms >= CONFIG_GB_SUCCESS_SCREEN_MS) {
+        /* The next guest lifting the handset ends the screen at once: no wait for the greeting. */
+        if (ms >= CONFIG_GB_SUCCESS_SCREEN_MS || (lifted(f) && !f->need_hangup)) {
             enter(f, ST_PREPARING_SLEEP);
         }
         break;

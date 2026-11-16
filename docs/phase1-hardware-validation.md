@@ -25,7 +25,7 @@ Two requirements changed after validation:
 | ESP32-C3 Super Mini | 1× I²S controller with independent TX/RX channels [V][i2s]; GPIO0–5 are the only deep-sleep wake pins [V][gpio]; 13 GPIOs on headers (0–10, 20, 21) [V][sigmdel]; VBUS wired directly to the 5V pin [V][sigmdel]; ME6211 500 mA LDO per schematic, some batches reported weaker [V][sigmdel] | Yes | Wi-Fi/BT off during guest sessions; Wi-Fi only in the listening mode (`architecture.md` §8). USB-Serial-JTAG for flashing and logs. |
 | I²S MEMS mic (6-pin: SD VDD GND L/R WS SCK) | Pin labels match common INMP441 breakouts [I]. INMP441: VDD 1.62–3.63 V, fSCK 0.5–3.2 MHz, fWS 7.8–50 kHz, **64 SCK per frame mandatory**, 24-bit two's-complement MSB-first, SD tri-states outside its slot, 100 kΩ SD pull-down recommended, zero output for 2¹⁸ SCK after power-up, standby (SCK stopped) 0.8 mA [V][inmp441] | Yes, if the IC is INMP441 or a pin-compatible 24-bit I²S part | **IC not confirmed [U].** Firmware treats it as a generic 24-bit-in-32-bit-slot Philips I²S mic. Test 6 checks the real bit depth. **Never connect VDD to 5 V** (abs max 3.63 V). |
 | MAX98357A | VDD 2.5–5.5 V; 3.2 W/4 Ω, 1.8 W/8 Ω @5 V 10 % THD; quiescent 2.4–2.75 mA; shutdown 0.6 µA (SD_MODE < 0.16 V); standby 340 µA if BCLK is absent; BCLK must be 32/48/64× LRCLK; LRCLK only 8/16/32/44.1/48/88.2/96 kHz; **"do not remove LRCLK while BCLK is present" (risk of large DC output)**; SD_MODE trip points 0.16/0.77/1.4 V, internal 100 kΩ pull-down [V][max] | Yes | 16 kHz with 64× BCLK is a supported mode. Breakout (Adafruit-style) has a 1 MΩ SD→VIN pull-up, which gives (L+R)/2 mode at 5 V, and defaults to 9 dB gain [V][ada]. Speaker must be ≥4 Ω [V][ada]. Powered from the switched rail, so it draws 0 µA in standby. BCLK and LRCLK come from one generator and stop together; the rail is cut only after I²S is closed. |
-| SSD1306 128×32 I²C | Keeps its image from internal GDDRAM while powered (no host refresh needed) [I, standard SSD1306 behaviour] | Yes | Power from **3.3 V** so the module's I²C pull-ups go to 3.3 V. |
+| SSD1306 128×64 I²C (0.96") | Keeps its image from internal GDDRAM while powered (no host refresh needed) [I, standard SSD1306 behaviour] | Yes | Power from **3.3 V** so the module's I²C pull-ups go to 3.3 V. |
 | WS2812B | VIH = 0.7·VDD (3.5 V at 5 V); ESP32 3.3 V logic is below spec [I, WS2812B datasheet value] | Yes, **with a level shifter** | SN74AHCT1G125 (VIH 2.0 V at 5 V). |
 | MicroSD SPI module | Onboard voltage regulator confirmed (user). The regulator drops ~1 V or more, so the module **must** get 5 V; at 3.3 V the card would be under-supplied | Yes | VCC = **5V bus**. The card and its logic side run at the regulator's 3.3 V, so the ESP32's 3.3 V signals are correct. Still to check: is the level translation done by a buffer IC (74LVC125/74HC125, 14-pin) or by resistor dividers? Dividers sized for 5 V MCUs would pull the ESP's 3.3 V down to ~2.2 V at the card. Only device on the bus, so a non-tri-stating MISO buffer is harmless. |
 | Mechanical endstop | Type unknown [U] | Yes | Bare 3-terminal microswitch preferred. A PCB endstop with LED must have its VCC on **3.3 V**, and its LED draws current in standby. |
@@ -117,7 +117,7 @@ Consequences:
 Wake: `esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown(BIT64(3), ESP_GPIO_WAKEUP_GPIO_LOW)` (ESP-IDF v6.1 name [V][sleep]).
 - The pull-up is external because RTC pins go high-Z in deep sleep without hold [V][sleep].
 - Wake is level-triggered, so the device only sleeps after GPIO3 has been HIGH and stable (default 500 ms). This makes duplicate wakes impossible.
-- Cold boot with the handset already lifted shows "LUTFEN KAPATIN" (please hang up) and does not start a session.
+- Cold boot (power-on / RESET) with the handset already lifted starts the Wi-Fi listening mode instead of a session (`architecture.md` §8); after a crash or software reset it shows AHİZEYİ KAPATIN.
 
 ### 4.3 Handset cable
 
@@ -335,7 +335,7 @@ Arduino adds a layer without removing any risk here.
 | 1 | Speaker [U] | handset earpiece |
 | 1 | MicroSD SPI module with onboard regulator, 5 V | storage |
 | 1 | MicroSD card: 8–32 GB SDHC, A1/U1 brand card, FAT32 | storage |
-| 1 | SSD1306 128×32 I²C | display |
+| 1 | SSD1306 128×64 I²C, 0.96" | display |
 | 1 | WS2812B | status LED |
 | 1 | Mechanical endstop / microswitch [U] | hook switch |
 | 1 | 5 V adapter [U] | power |
@@ -390,7 +390,7 @@ Arduino adds a layer without removing any risk here.
 | D6 | Power entry | **Panel-mount USB-C power-only breakout (5.1 kΩ CC resistors)** + 1.5 A PTC + 1000 µF. Works with any 5 V/≥2 A USB adapter. | T9 (current) |
 | D7 | I²C pull-ups | The firmware enables internal pull-ups. Fit 4.7 kΩ to 3V3 only if T1 reports SDA/SCL floating. | T1 |
 | D8 | Power gating | **Changed for energy:** GPIO10 = `PWR_EN` rail switch for SD, amp, LED and mic. The amp's separate shutdown is dropped. Fallback if T6/T8 show cord coupling: the AMP_SD baseline (§4.3). | T1, T6, T8, T9 |
-| D9 | 180 s limit | **Finalize the WAV immediately at 180 s**, show "AHIZEYI KAPATIN", wait for hang-up, then show the result. No audio is at risk if the handset is left off-hook. | Phase 5 |
+| D9 | 180 s limit | **Finalize the WAV immediately at 180 s**, show "AHİZEYİ KAPATIN", wait for hang-up, then show the result. No audio is at risk if the handset is left off-hook. | Phase 5 |
 | D10 | I²S clocking | MCLK = 512·fs, so the TX BCLK divider is 8 (the IDF driver warns below 6 for TX at 256·fs). | build, T7/T8 |
 | D11 | Energy | CPU at 80 MHz. Red power LED desoldered. Standby screen `full` / `minimal` / `off` set in `config.txt`; default `full` (spec), final choice from T9 current readings. LED cap 40/255. OLED contrast 0x30. | T9 |
 | D12 | Robustness | SD writer on the task watchdog with a 5 s stop deadline. Power-cut repair of the in-progress file. Crash-loop safe mode after 3 crashes. Crash dumps kept in flash. CRC-32 manifest and event log on the card. | host tests, T5/T6 |

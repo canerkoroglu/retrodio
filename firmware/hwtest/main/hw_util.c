@@ -171,10 +171,10 @@ void hw_oled_status(const char *line1, const char *line2)
     }
     rg_oled_clear();
     if (line1) {
-        rg_oled_text_center(4, line1, 1);
+        rg_oled_font_text_center(&rg_font_big, 24, line1, 0);
     }
     if (line2) {
-        rg_oled_text_center(18, line2, 1);
+        rg_oled_font_text_center(&rg_font_small, 46, line2, 0);
     }
     rg_oled_flush();
 }

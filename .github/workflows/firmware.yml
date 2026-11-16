@@ -26,7 +26,7 @@ jobs:
         run: |
           pip install --quiet clang-format==23.1.5
           find firmware/components firmware/hwtest/main firmware/guestbook/main firmware/test -name '*.[ch]' \
-            ! -name 'rg_font5x7.c' -print0 | xargs -0 clang-format --style=file:firmware/.clang-format --dry-run --Werror
+            ! -name 'rg_font5x7.c' ! -name 'rg_fonts.c' -print0 | xargs -0 clang-format --style=file:firmware/.clang-format --dry-run --Werror
 
   build:
     runs-on: ubuntu-latest

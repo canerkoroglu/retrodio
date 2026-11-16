@@ -37,7 +37,7 @@ stateDiagram-v2
     SAVING --> PREPARING_SLEEP: shorter than min_seconds (deleted)
     SAVING --> ERROR: save failed
 
-    SUCCESS --> PREPARING_SLEEP: after 2 s
+    SUCCESS --> PREPARING_SLEEP: after 5 s, or lifted again
     ERROR --> PREPARING_SLEEP: after 3 s and handset down
     ERROR --> [*]: SD timeout -> reboot
     HANG_UP --> PREPARING_SLEEP: handset down
@@ -47,20 +47,25 @@ stateDiagram-v2
     PREPARING_SLEEP --> [*]: down >= 500 ms -> deep sleep (STANDBY)
 ```
 
-Every screen except ERROR uses one layout: the message count rotated 90° in the left column, vertically centred, with 21 px tall digits (`025`, `---` before the card is read). Four or more characters (`025!` when the card is almost full, or 1000+ messages) are drawn smaller. The action is in large letters (2×, up to 10 characters per line) beside it.
+The OLED is a 0.96" SSD1306, 128×64. Every screen except ERROR and WIFI uses one layout (`rg_oled_action_screen()`), in Rubik Bold bitmap fonts with Turkish letters (SIL OFL, `firmware/components/rg/fonts/LICENSE-Rubik.txt`):
+
+- **Top half:** the message count as `#025` in 18 px digits at the top-left (`#---` before the card is read). Beside it, vertically centred, the caption MESAJ, or AZ YER / KALDI! when the card is almost full; while recording, the countdown (`2:59`) top-right instead.
+- **Bottom half:** the action on one or two centred lines (13 px capitals).
+
+ERROR shows a title and a hint; WIFI shows the network name, address and what is playing. Drawing lives in `gb_ui_draw.c` (no FreeRTOS), so the screens can be rendered on a PC.
 
 | State | OLED | WS2812B | Rail | Notes |
 |---|---|---|---|---|
-| STANDBY (deep sleep) | AHIZEYI / KALDIRIN (`full`), count only (`minimal`), or panel off | off | **off** | ESP32 + OLED only |
-| WAKING | AHIZEYI / KALDIRIN | blue, short blink | on | lift must stay ≥ 60 ms; card mount, recovery, `config.txt`, catalog |
-| GREETING | AHIZEYI / KALDIRIN | yellow, slow breathing | on | WAV file already created (SD latency can never cost the first words) |
-| INSTRUCTION / BEEP | AHIZEYI / KALDIRIN | yellow, slow breathing | on | `beep.wav`, or a built-in 400 ms 1 kHz tone |
-| RECORDING | KONUSMAYA / BASLAYIN, small 2:59 bottom-right | green, breathing | on | countdown each second |
-| MAX_DURATION | AHIZEYI / KAPATIN | yellow, solid | on | message already finalized (decision D9) |
-| SAVING | LUTFEN / BEKLEYIN | cyan, fast blink | on | header, fsync, close, re-open, verify |
-| SUCCESS | MESAJINIZ / KAYDEDILDI | green, solid 2 s | on | count and manifest updated only now |
-| ERROR | KAYIT HATASI · KART HATASI · KART DOLU · SERVIS GEREKLI · WIFI AYARI YOK + hint | red, fast blink | on | min 3 s, until hang-up |
-| HANG_UP | AHIZEYI / KAPATIN | off | on | crash / software reset or session end with the handset still up |
+| STANDBY (deep sleep) | AHİZEYİ / KALDIRIN (`full`), count only (`minimal`), or panel off | off | **off** | ESP32 + OLED only |
+| WAKING | AHİZEYİ / KALDIRIN | blue, short blink | on | lift must stay ≥ 60 ms; card mount, recovery, `config.txt`, catalog |
+| GREETING | AHİZEYİ / KALDIRIN | yellow, slow breathing | on | WAV file already created (SD latency can never cost the first words) |
+| INSTRUCTION / BEEP | AHİZEYİ / KALDIRIN | yellow, slow breathing | on | `beep.wav`, or a built-in 400 ms 1 kHz tone |
+| RECORDING | KONUŞMAYA / BAŞLAYIN, large 2:59 top-right | green, breathing | on | countdown each second |
+| MAX_DURATION | AHİZEYİ / KAPATIN | yellow, solid | on | message already finalized (decision D9) |
+| SAVING | LÜTFEN / BEKLEYİN | cyan, fast blink | on | header, fsync, close, re-open, verify |
+| SUCCESS | MESAJINIZ / KAYDEDİLDİ | green, solid 5 s | on | count and manifest updated only now |
+| ERROR | KAYIT HATASI · KART HATASI · KART DOLU · CİHAZ ARIZASI · WIFI.TXT YOK + hint | red, fast blink | on | min 3 s, until hang-up |
+| HANG_UP | AHİZEYİ / KAPATIN | off | on | crash / software reset or session end with the handset still up |
 | WIFI (listening mode) | WIFI *ssid* / 192.168.4.1 / CALIYOR: MESAJ 12 | blue, slow breathing | on | access point + web player, no guest sessions (§8) |
 
 Rules from the spec, and where they are enforced:
@@ -111,7 +116,7 @@ flowchart LR
 | Hook debounce | 40 ms | menuconfig `RG_HOOK_DEBOUNCE_MS` |
 | Lift confirmation after wake | 60 ms | `GB_WAKE_CONFIRM_MS` |
 | Down before deep sleep | 500 ms | `GB_SLEEP_STABLE_MS` |
-| Success screen | 2000 ms | `GB_SUCCESS_SCREEN_MS` |
+| Success screen | 5000 ms (a new lift ends it at once) | `GB_SUCCESS_SCREEN_MS` |
 | Error screen (minimum) | 3000 ms | `GB_ERROR_SCREEN_MS` |
 | Save deadline → reboot | 5000 ms | `GB_SAVE_TIMEOUT_MS` (< task watchdog 10 s) |
 | Ring buffer | 64 KB | `GB_RING_KB` (size from hardware test 5) |
@@ -128,7 +133,7 @@ flowchart LR
 | SD write error | KAYIT HATASI. The file stays marked; the next boot repairs it if possible. |
 | SD stops responding | The 5 s save deadline expires: error screen, then reboot. A watchdog panic after 10 s covers a fully stuck writer. The file is repaired on the next mount. |
 | Power cut while recording | The next boot repairs the header from the file length (≤ 5 s lost), or deletes it if shorter than `min_seconds`. |
-| Repeated crashes | After 3 in a row: SERVIS GEREKLI, card not touched, until power-cycled. The first crash dump stays in flash. |
+| Repeated crashes | After 3 in a row: CİHAZ ARIZASI, card not touched, until power-cycled. The first crash dump stays in flash. |
 | Bad greeting format | Skipped with a log warning; the guest still gets the beep and can record. |
 | Ring buffer overflow | Counted as dropped bytes, logged with "(audio dropped: enlarge ring)". |
 
@@ -156,12 +161,12 @@ It ends with `RESULT SOAK PASS|FAIL sessions=… saved=… discarded=… errors=
 
 ## 8. Listening mode (Wi-Fi)
 
-Power the phone on (plug in, or press RESET) **with the handset lifted**. Instead of AHIZEYI KAPATIN, the WIFI state starts (`gb_web.c`):
+Power the phone on (plug in, or press RESET) **with the handset lifted**. Instead of AHİZEYİ KAPATIN, the WIFI state starts (`gb_web.c`):
 
-- **Access point:** network name and password come from `/audio/wifi.txt` (`SSID = …`, `PASSWORD = …`, template `sdcard/audio/wifi.example.txt`). The password is required. Without a usable file the mode does not start and the OLED shows WIFI AYARI YOK (ERROR state, back to standby after hang-up); an optional menuconfig fallback lives only in the git-ignored `sdkconfig`. WPA2, channel 6, at most 4 phones, transmit power capped at 8.5 dBm (Super Mini antenna).
+- **Access point:** network name and password come from `/audio/wifi.txt` (`SSID = …`, `PASSWORD = …`, template `sdcard/audio/wifi.example.txt`). The password is required. Without a usable file the mode does not start and the OLED shows WIFI.TXT YOK (ERROR state, back to standby after hang-up); an optional menuconfig fallback lives only in the git-ignored `sdkconfig`. WPA2, channel 6, at most 4 phones, transmit power capped at 8.5 dBm (Super Mini antenna).
 - **Web page:** `http://192.168.4.1` lists the messages, newest first. *Çal* plays one through the handset speaker, *Durdur* stops it, *İndir* downloads the WAV file and *Kapat* ends the mode.
 - **No guest sessions** while the mode is on. The guest engine stays idle, so the player owns I²S TX (BCLK and LRC start and stop together, as in a session).
-- **The mode ends** after 5 idle minutes (handset down, nothing playing, no request from the page; `GB_WIFI_IDLE_MIN`) or with *Kapat*. It ends with a reboot, which releases all Wi-Fi memory. A software reset never re-enters the mode, so with the handset still up the phone shows AHIZEYI KAPATIN.
+- **The mode ends** after 5 idle minutes (handset down, nothing playing, no request from the page; `GB_WIFI_IDLE_MIN`) or with *Kapat*. It ends with a reboot, which releases all Wi-Fi memory. A software reset never re-enters the mode, so with the handset still up the phone shows AHİZEYİ KAPATIN.
 
 | Endpoint | Method | Result |
 |---|---|---|

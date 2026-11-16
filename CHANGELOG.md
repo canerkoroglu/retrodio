@@ -2,10 +2,11 @@
 
 ## 1.1.0 (guestbook), unreleased
 
-- Listening mode (Wi-Fi): power on with the handset lifted to start a WPA2 access point and a web page at `http://192.168.4.1`. It lists the messages, plays one through the handset speaker, and downloads the WAV. No guest sessions while it runs. It ends with Kapat or after 5 idle minutes, with a reboot. Network name and password come from `/audio/wifi.txt` (`SSID`, `PASSWORD` required, 8–63 characters). Without a usable file the OLED shows WIFI AYARI YOK; an optional menuconfig fallback lives only in the local `sdkconfig`. No credentials in the repository: `sdcard/audio/wifi.txt` is git-ignored, `wifi.example.txt` holds placeholders.
-- A crash or watchdog reset with the handset lifted still shows AHIZEYI KAPATIN; only a power-on / RESET starts listening mode.
-- OLED: message count with 21 px tall digits (was 5 px), vertically centred in the left column (smaller for 4+ characters). To fit beside it: the recording countdown is `m:ss` in the bottom-right corner, the saving screen reads LUTFEN BEKLEYIN, and the success screen MESAJINIZ KAYDEDILDI (no `!`).
-- Releasing a peripheral pin (SD CS, I²S) resets it first, which removes the `gpio: conflict found for GPIO[2]` warning before deep sleep.
+- Listening mode (Wi-Fi): power on with the handset lifted to start a WPA2 access point and a web page at `http://192.168.4.1`. It lists the messages, plays one through the handset speaker, and downloads the WAV. No guest sessions while it runs. It ends with Kapat or after 5 idle minutes, with a reboot. Network name and password come from `/audio/wifi.txt` (`SSID`, `PASSWORD` required, 8–63 characters). Without a usable file the OLED shows WIFI.TXT YOK; an optional menuconfig fallback lives only in the local `sdkconfig`. No credentials in the repository: `sdcard/audio/wifi.txt` is git-ignored, `wifi.example.txt` holds placeholders.
+- MESAJINIZ KAYDEDİLDİ stays 5 s (was 2 s); the next guest lifting the handset ends it at once.
+- A crash or watchdog reset with the handset lifted still shows AHİZEYİ KAPATIN; only a power-on / RESET starts listening mode.
+- OLED: 0.96" SSD1306 128×64 (was 128×32). Rubik Bold bitmap fonts with Turkish letters (`firmware/tools/gen_fonts.py`; SIL OFL 1.1, license in `components/rg/fonts/LICENSE-Rubik.txt`): message count as `#025` (18 px) at the top-left with the caption MESAJ centred beside it (AZ YER KALDI! when the card is almost full), large countdown top-right while recording, action lines in the bottom half (AHİZEYİ KALDIRIN, KONUŞMAYA BAŞLAYIN, LÜTFEN BEKLEYİN, MESAJINIZ KAYDEDİLDİ). Error and Wi-Fi screens redesigned. Drawing moved to `gb_ui_draw.c` so screens render on a PC.
+- GPIO: the LED pin is held low at boot without reserving it (no more `rmt: GPIO 7 is not usable` warning), and released peripheral pins are reset before they float. The `conflict found for GPIO[2]` line before deep sleep comes from ESP-IDF's SD-card driver and is harmless.
 - `rg_wifi_cfg` parser with host tests; the shipped `wifi.example.txt` is checked in CI.
 
 ## 1.0.0 (guestbook), unreleased: not yet run on hardware

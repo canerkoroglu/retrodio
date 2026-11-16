@@ -14,9 +14,9 @@ menu "Guestbook application"
         default 500
 
     config GB_SUCCESS_SCREEN_MS
-        int "KAYIT BASARILI screen + solid green LED (ms)"
+        int "MESAJINIZ KAYDEDILDI screen + solid green LED (ms); a new lift ends it early"
         range 500 10000
-        default 2000
+        default 5000
 
     config GB_ERROR_SCREEN_MS
         int "Minimum error screen time (ms)"

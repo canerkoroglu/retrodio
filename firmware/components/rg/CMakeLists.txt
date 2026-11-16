@@ -8,6 +8,7 @@ idf_component_register(
         "rg_err.c"
         "rg_eventlog.c"
         "rg_font5x7.c"
+        "rg_fonts.c"
         "rg_hook.c"
         "rg_led.c"
         "rg_mic_conv.c"

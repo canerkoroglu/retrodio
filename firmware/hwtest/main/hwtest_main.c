@@ -24,7 +24,7 @@ typedef struct {
 
 static const test_t TESTS[] = {
     {"Board & wiring (pull resistors, strapping, hook)", t1_board},
-    {"OLED SSD1306 128x32", t2_oled},
+    {"OLED SSD1306 128x64", t2_oled},
     {"WS2812B status LED", t3_led},
     {"Hook switch & debounce", t4_hook},
     {"MicroSD read/write/latency", t5_sd},

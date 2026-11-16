@@ -6,7 +6,7 @@
 
 /*
  * OLED UI service. The state machine publishes a small model; a low-priority task renders it
- * (~13 ms I2C flush) so the display never delays audio or SD work.
+ * (~26 ms I2C flush for the 128x64 panel) so the display never delays audio or SD work.
  */
 
 typedef enum {
@@ -28,7 +28,7 @@ typedef enum {
     GB_UI_ERR_CARD,    /* KART HATASI: missing / unreadable card */
     GB_UI_ERR_FULL,    /* KART DOLU */
     GB_UI_ERR_SERVICE, /* SERVIS GEREKLI: safe mode after repeated crashes */
-    GB_UI_ERR_WIFI,    /* WIFI AYARI YOK: listening mode without a usable wifi.txt */
+    GB_UI_ERR_WIFI,    /* WIFI.TXT YOK: listening mode without a usable wifi.txt */
 } gb_ui_error_t;
 
 typedef struct {
@@ -45,6 +45,10 @@ typedef struct {
     uint32_t wifi_playing; /* message index, 0 = idle */
     uint32_t wifi_clients;
 } gb_ui_model_t;
+
+/** Draw the model into the OLED frame buffer (gb_ui_draw.c). Returns false if the panel
+ *  should be switched off instead (standby "off"). */
+bool gb_ui_draw(const gb_ui_model_t *model);
 
 void gb_ui_init(void);
 /** Publish a new model (non-blocking; rendering happens in the UI task). */

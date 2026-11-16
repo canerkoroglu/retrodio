@@ -7,7 +7,7 @@ firmware/
 │   ├── rg_power         switched 5 V peripheral rail, reference counted (energy)
 │   ├── rg_system        NVS, boot counter, crash-loop guard, crash-dump detection, version
 │   ├── rg_hook          hook switch: debounce, deep-sleep wake
-│   ├── rg_oled          SSD1306 128x32, 5x7 font, warm init, I2C recovery, panel sleep
+│   ├── rg_oled          SSD1306 128x64, Rubik Bold bitmap fonts (Turkish), 5x7 diagnostics font, warm init, I2C recovery, panel sleep
 │   ├── rg_led           WS2812B effects task, brightness cap, holds the rail while lit
 │   ├── rg_storage       SD over SPI + FAT mount; powers the rail, releases pins on unmount
 │   ├── rg_wav           WAV parse / never-overwrite writer / checkpoint / power-cut repair
