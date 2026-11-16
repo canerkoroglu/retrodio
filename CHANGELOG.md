@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0 (guestbook), unreleased
+
+- Listening mode (Wi-Fi): power on with the handset lifted to start a WPA2 access point and a web page at `http://192.168.4.1`. It lists the messages, plays one through the handset speaker, and downloads the WAV. No guest sessions while it runs. It ends with Kapat or after 5 idle minutes, with a reboot. Network name and password come from `/audio/wifi.txt` (`SSID`, `PASSWORD` required, 8–63 characters). Without a usable file the OLED shows WIFI AYARI YOK; an optional menuconfig fallback lives only in the local `sdkconfig`. No credentials in the repository: `sdcard/audio/wifi.txt` is git-ignored, `wifi.example.txt` holds placeholders.
+- A crash or watchdog reset with the handset lifted still shows AHIZEYI KAPATIN; only a power-on / RESET starts listening mode.
+- OLED: message count with 21 px tall digits (was 5 px), vertically centred in the left column (smaller for 4+ characters). To fit beside it: the recording countdown is `m:ss` in the bottom-right corner, the saving screen reads LUTFEN BEKLEYIN, and the success screen MESAJINIZ KAYDEDILDI (no `!`).
+- Releasing a peripheral pin (SD CS, I²S) resets it first, which removes the `gpio: conflict found for GPIO[2]` warning before deep sleep.
+- `rg_wifi_cfg` parser with host tests; the shipped `wifi.example.txt` is checked in CI.
+
 ## 1.0.0 (guestbook), unreleased: not yet run on hardware
 
 - OLED shows only the action, in large letters (2×): AHIZEYI KALDIRIN (standby, greeting) → KONUSMAYA BASLAYIN (recording, small countdown top-right) → AHIZEYI KAPATIN (time limit, handset left up) → MESAJINIZ KAYDEDILDI!. The message count is rotated 90° at the top-left (`!` when the card is almost full). Shared layout `rg_oled_action_screen()` is used by the guestbook and hwtest T2/T9.

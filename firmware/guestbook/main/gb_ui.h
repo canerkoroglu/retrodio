@@ -20,6 +20,7 @@ typedef enum {
     GB_UI_SUCCESS,
     GB_UI_ERROR,
     GB_UI_HANG_UP,
+    GB_UI_WIFI, /* listening mode */
 } gb_ui_screen_t;
 
 typedef enum {
@@ -27,6 +28,7 @@ typedef enum {
     GB_UI_ERR_CARD,    /* KART HATASI: missing / unreadable card */
     GB_UI_ERR_FULL,    /* KART DOLU */
     GB_UI_ERR_SERVICE, /* SERVIS GEREKLI: safe mode after repeated crashes */
+    GB_UI_ERR_WIFI,    /* WIFI AYARI YOK: listening mode without a usable wifi.txt */
 } gb_ui_error_t;
 
 typedef struct {
@@ -38,6 +40,10 @@ typedef struct {
     bool low_space; /* standby hint: card almost full */
     rg_standby_screen_t standby;
     uint32_t shift; /* burn-in pixel shift seed (session counter) */
+    /* listening mode */
+    char wifi_ssid[33];
+    uint32_t wifi_playing; /* message index, 0 = idle */
+    uint32_t wifi_clients;
 } gb_ui_model_t;
 
 void gb_ui_init(void);

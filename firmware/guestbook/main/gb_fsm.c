@@ -14,6 +14,7 @@
 #include "gb_audio.h"
 #include "gb_soak.h"
 #include "gb_ui.h"
+#include "gb_web.h"
 #include "rg_audio.h"
 #include "rg_board.h"
 #include "rg_catalog.h"
@@ -25,6 +26,7 @@
 #include "rg_recorder.h"
 #include "rg_settings.h"
 #include "rg_storage.h"
+#include "rg_wifi_cfg.h"
 
 #define LOOP_MS               10
 #define WAKE_CONFIRM_LIMIT_MS 1000 /* give up confirming a lift after this */
@@ -44,11 +46,12 @@ typedef enum {
     ST_ERROR,
     ST_HANG_UP,
     ST_PREPARING_SLEEP,
+    ST_WIFI, /* listening mode: access point + web player, no guest sessions */
 } state_t;
 
 static const char *const STATE_NAMES[] = {
-    "INITIALIZING", "WAKING", "GREETING", "INSTRUCTION", "BEEP",    "RECORDING",
-    "MAX_DURATION", "SAVING", "SUCCESS",  "ERROR",       "HANG_UP", "PREPARING_SLEEP",
+    "INITIALIZING", "WAKING", "GREETING", "INSTRUCTION",     "BEEP", "RECORDING", "MAX_DURATION", "SAVING",
+    "SUCCESS",      "ERROR",  "HANG_UP",  "PREPARING_SLEEP", "WIFI",
 };
 
 /* Sessions since power-on: burn-in pixel shift and log line prefix. */
@@ -69,6 +72,10 @@ typedef struct {
     bool wdt;                /* main task currently subscribed to the task watchdog */
     bool result_ready;       /* MAX_DURATION: the message is already saved, result held for hang-up */
     gb_audio_event_t result;
+    rg_wifi_cfg_t wifi;     /* listening mode credentials */
+    int64_t wifi_active_us; /* last handset lift, playback or web request */
+    uint32_t wifi_playing;  /* last values shown on the OLED */
+    uint32_t wifi_clients;
 } fsm_t;
 
 static bool hook_raw(void)
@@ -89,7 +96,10 @@ static void show(fsm_t *f, gb_ui_screen_t screen, bool sync)
         .error = f->error,
         .standby = f->settings.standby_screen,
         .shift = s_session,
+        .wifi_playing = f->wifi_playing,
+        .wifi_clients = f->wifi_clients,
     };
+    strlcpy(m.wifi_ssid, f->wifi.ssid, sizeof(m.wifi_ssid));
     if (rg_catalog_valid()) {
         rg_catalog_state_t c;
         rg_catalog_get(&c);
@@ -265,6 +275,52 @@ static void prepare_sleep(fsm_t *f)
     show(f, GB_UI_STANDBY, true);
 }
 
+/* Listening mode starts only on a deliberate power-on or RESET with the handset lifted, never
+ * after a crash or watchdog reset in the middle of a guest's session. */
+static bool wifi_trigger(esp_reset_reason_t reason)
+{
+    return reason == ESP_RST_POWERON || reason == ESP_RST_EXT || reason == ESP_RST_USB || reason == ESP_RST_JTAG;
+}
+
+static bool start_wifi(fsm_t *f)
+{
+    strlcpy(f->wifi.ssid, CONFIG_GB_WIFI_SSID, sizeof(f->wifi.ssid));
+    strlcpy(f->wifi.password, CONFIG_GB_WIFI_PASSWORD, sizeof(f->wifi.password));
+    char warn[256];
+    int warnings = rg_wifi_cfg_load(RG_FILE_WIFI, &f->wifi, warn, sizeof(warn));
+    if (warnings < 0) {
+        ESP_LOGW(TAG, "no %s: using the menuconfig fallback, if any", RG_FILE_WIFI);
+    } else if (warnings > 0) {
+        rg_eventlog("wifi.txt: %d warning(s)\n%s", warnings, warn);
+    }
+    if (!f->wifi.ssid[0] || strlen(f->wifi.password) < RG_WIFI_PASS_MIN) {
+        rg_eventlog("listening mode: no usable SSID/PASSWORD in %s", RG_FILE_WIFI);
+        return false;
+    }
+    esp_err_t err = gb_web_start(&f->wifi);
+    if (err != ESP_OK) {
+        rg_eventlog("listening mode failed to start: %s", rg_err_name(err));
+        return false;
+    }
+    rg_eventlog("listening mode on, SSID %s", f->wifi.ssid);
+    f->wifi_active_us = esp_timer_get_time();
+    f->wifi_playing = 0;
+    f->wifi_clients = 0;
+    return true;
+}
+
+/* Every Wi-Fi resource is released by a reboot; the handset decides what comes next
+ * (down: standby, lifted: "please hang up" - a software reset never re-enters this mode). */
+static void stop_wifi(fsm_t *f, const char *why)
+{
+    (void)f;
+    rg_eventlog("listening mode off (%s)", why);
+    gb_web_stop_playback(2000);
+    rg_storage_unmount();
+    rg_led_off_sync();
+    esp_restart();
+}
+
 static void go_to_sleep(fsm_t *f)
 {
     if (!f->boot->safe_mode) {
@@ -323,6 +379,16 @@ static void enter(fsm_t *f, state_t st)
     case ST_PREPARING_SLEEP:
         prepare_sleep(f);
         break;
+    case ST_WIFI:
+        if (!start_wifi(f)) {
+            f->error = GB_UI_ERR_WIFI; /* WIFI AYARI YOK: shown until the handset is down */
+            f->reboot_after_error = false;
+            enter(f, ST_ERROR);
+            break;
+        }
+        rg_led_set(RG_LED_BREATHE_SLOW, RG_RGB_BLUE);
+        show(f, GB_UI_WIFI, false);
+        break;
     }
 }
 
@@ -354,8 +420,10 @@ static void step(fsm_t *f, const gb_audio_event_t *ev, bool hook_changed, int64_
     case ST_INITIALIZING: /* cold boot / reset: never starts a session on its own */
         if (!mount_card(f)) {
             fail(f, GB_UI_ERR_CARD, false);
+        } else if (!lifted(f)) {
+            enter(f, ST_PREPARING_SLEEP);
         } else {
-            enter(f, lifted(f) ? ST_HANG_UP : ST_PREPARING_SLEEP);
+            enter(f, wifi_trigger(f->boot->reason) && !gb_soak_active() ? ST_WIFI : ST_HANG_UP);
         }
         break;
 
@@ -501,6 +569,28 @@ static void step(fsm_t *f, const gb_audio_event_t *ev, bool hook_changed, int64_
             go_to_sleep(f);
         }
         break;
+
+    case ST_WIFI: {
+        gb_web_status_t ws;
+        gb_web_status(&ws);
+        if (lifted(f) || ws.playing) {
+            f->wifi_active_us = now;
+        }
+        if (ws.last_request_us > f->wifi_active_us) {
+            f->wifi_active_us = ws.last_request_us;
+        }
+        if (ws.playing != f->wifi_playing || ws.clients != f->wifi_clients) {
+            f->wifi_playing = ws.playing;
+            f->wifi_clients = ws.clients;
+            show(f, GB_UI_WIFI, false);
+        }
+        if (ws.exit_requested) {
+            stop_wifi(f, "Kapat on the page");
+        } else if (now - f->wifi_active_us >= CONFIG_GB_WIFI_IDLE_MIN * 60000000LL) {
+            stop_wifi(f, "idle");
+        }
+        break;
+    }
     }
 }
 

@@ -1,6 +1,6 @@
 # Retro Audio Guestbook
 
-An offline wedding/event audio guestbook built into a 3D-printed rotary telephone. A guest lifts the handset, hears a greeting and a beep, and leaves a message. Each message is saved as its own WAV file on a microSD card.
+An offline wedding/event audio guestbook built into a 3D-printed rotary telephone. A guest lifts the handset, hears a greeting and a beep, and leaves a message. Each message is saved as its own WAV file on a microSD card. A Wi-Fi listening mode (§9) plays the messages back through the handset from a phone's browser.
 
 | Item | Detail |
 |---|---|
@@ -169,6 +169,7 @@ python -m esptool --chip esp32c3 -p PORT -b 460800 write-flash 0x0 build/merged-
 
 ```
 /audio/config.txt                  settings (volume, mic gain, max length, LED, contrast, standby screen)
+/audio/wifi.txt                    listening mode network name and password (§9)
 /audio/greetings/greeting.wav
 /audio/greetings/instruction.wav   optional
 /audio/greetings/beep.wav
@@ -223,13 +224,31 @@ The test WAV files (`TEST_MIC.wav`, `TEST_DUPLEX.wav`, `TEST_SEQ.wav`) and the s
 2. **Card:** FAT32, greeting files and `config.txt` present, no test files, at least 2 GB free.
 3. **Power:** the 5 V ≥2 A **mains adapter** through the rear USB-C input only; no PC attached. Avoid power banks unless they have a low-current (always-on) mode, because standby draws only a few mA.
 4. **Standby:** the OLED shows the total count and the LED is off.
-5. **Test call:** lift the handset, hear the greeting and beep, speak 5 s, hang up. You should see "MESAJINIZ KAYDEDILDI!" and the count at the top-left goes up by one.
+5. **Test call:** lift the handset, hear the greeting and beep, speak 5 s, hang up. You should see "MESAJINIZ KAYDEDILDI" and the large count on the left goes up by one.
 6. **Spare kit in the box:** pre-flashed Super Mini (guestbook build), second microSD card with greetings and `config.txt`, spare handset cord.
 7. **After the event:**
    1. Power off and remove the card.
    2. Copy the whole `/audio/` folder (recordings, `manifest.csv`, `log.txt`) to two places.
    3. Spot-check messages against their manifest CRC (see `sdcard/README.md`).
    4. Only then reuse the card.
+
+## 9. Listening mode (Wi-Fi)
+
+Play the messages back through the handset from a phone, without taking the card out.
+
+1. **Start it:** lift the handset, then power the phone on (plug in the adapter, or press **RESET**). The OLED shows `WIFI <network name>` and `192.168.4.1`, and the LED breathes blue.
+2. **Connect:** join the network on your phone, then open `http://192.168.4.1`.
+3. **Listen:** hold the handset to your ear and tap **Çal** next to a message. **Durdur** stops it, **İndir** saves the WAV file to the phone.
+4. **Finish:** tap **Kapat**, or leave it for 5 minutes with the handset down and nothing playing. The phone reboots into normal guestbook mode.
+
+- **No guest recordings** are taken while the mode is on.
+- **Network name and password** come from `/audio/wifi.txt` on the card. Copy [`sdcard/audio/wifi.example.txt`](sdcard/audio/wifi.example.txt) to the card as `/audio/wifi.txt` and replace both values; edit it on a computer to change them later:
+  ```
+  SSID = AgAdiniz
+  PASSWORD = parolaniz
+  ```
+  The password is required, 8–63 characters (WPA2). Without a usable file the OLED shows WIFI AYARI YOK; invalid lines are reported in `log.txt`. `sdcard/audio/wifi.txt` is git-ignored, so a local copy with real values never reaches the repository. An optional fallback can be set in menuconfig (`GB_WIFI_SSID` / `GB_WIFI_PASSWORD`); it lives only in the git-ignored `sdkconfig`.
+- **Not a guest feature:** a guest lifting the handset never starts it, and neither does a crash or watchdog reset.
 
 ## Troubleshooting
 
@@ -244,3 +263,6 @@ The test WAV files (`TEST_MIC.wav`, `TEST_DUPLEX.wav`, `TEST_SEQ.wav`) and the s
 | Boot banner says `SAFE MODE` | 3 crashes in a row: read the dump (`idf.py coredump-info`), check `/audio/log.txt`, try a fresh card |
 | Menu prints `Peripheral rail: ON (leak!)` | A module kept the rail on after a test; report the test number |
 | Phone switches off on a power bank | Standby current is below the bank's auto-off threshold: use the mains adapter or a bank with a low-current mode |
+| Listening mode does not start | The handset must be lifted *before* power-on / RESET; after a crash it shows AHIZEYI KAPATIN instead. Check `log.txt` for `listening mode` lines |
+| Phone cannot find or keeps losing the network | Stay within a few metres; Super Mini antennas are weak. Try `GB_WIFI_TX_POWER_QDBM` between 34 and 60, or another `GB_WIFI_CHANNEL` |
+| Wrong network name / password, or WIFI AYARI YOK | Check `/audio/wifi.txt` (`SSID`, `PASSWORD` 8–63 characters); `log.txt` lists rejected lines |

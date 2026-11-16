@@ -29,6 +29,7 @@
 #define RG_FILE_INSTRUCTION RG_DIR_GREETINGS "/instruction.wav"
 #define RG_FILE_BEEP        RG_DIR_GREETINGS "/beep.wav"
 #define RG_FILE_CONFIG      RG_DIR_AUDIO "/config.txt"
+#define RG_FILE_WIFI        RG_DIR_AUDIO "/wifi.txt"
 #define RG_FILE_MANIFEST    RG_DIR_AUDIO "/manifest.csv"
 #define RG_FILE_LOG         RG_DIR_AUDIO "/log.txt"
 

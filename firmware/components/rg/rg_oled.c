@@ -159,17 +159,17 @@ void rg_oled_text(int x, int y, const char *s, int scale)
     }
 }
 
-void rg_oled_text_vertical(int x, int y, const char *s, int scale)
+void rg_oled_text_vertical_xy(int x, int y, const char *s, int scale_x, int scale_y)
 {
-    int bottom = y + rg_oled_text_width(s, scale) - 1;
+    int bottom = y + rg_oled_text_width(s, scale_y) - 1;
     for (int i = 0; s[i]; i++) {
         const uint8_t *g = font(s[i]);
         for (int col = 0; col < 5; col++) {
             for (int row = 0; row < 7; row++) {
                 if (g[col] & (1U << row)) {
-                    for (int sy = 0; sy < scale; sy++) {
-                        for (int sx = 0; sx < scale; sx++) {
-                            rg_oled_pixel(x + row * scale + sx, bottom - (i * RG_FONT_ADVANCE + col) * scale - sy,
+                    for (int sy = 0; sy < scale_y; sy++) {
+                        for (int sx = 0; sx < scale_x; sx++) {
+                            rg_oled_pixel(x + row * scale_x + sx, bottom - (i * RG_FONT_ADVANCE + col) * scale_y - sy,
                                           true);
                         }
                     }
@@ -177,6 +177,11 @@ void rg_oled_text_vertical(int x, int y, const char *s, int scale)
             }
         }
     }
+}
+
+void rg_oled_text_vertical(int x, int y, const char *s, int scale)
+{
+    rg_oled_text_vertical_xy(x, y, s, scale, scale);
 }
 
 int rg_oled_text_width(const char *s, int scale)
@@ -192,17 +197,24 @@ void rg_oled_text_center(int y, const char *s, int scale)
 
 void rg_oled_action_screen(const char *side, const char *top, const char *bottom, int reserve_right, int dx)
 {
-    const int left = 9; /* 7 px rotated label + 2 px gap */
-    const int span = RG_OLED_WIDTH - reserve_right - left;
+    const int left = RG_OLED_SIDE_WIDTH;
+    const int span = RG_OLED_WIDTH - left;
     if (side) {
-        rg_oled_text_vertical(1 + dx, 0, side, 1);
+        /* Up to three characters: 2x along the text (28 px of the 32 px height) and 3x across it,
+         * so the digits read 21 px tall. Longer labels (025!, 1000) drop to 1x along, 2x across. */
+        bool big = rg_oled_text_width(side, 2) <= RG_OLED_HEIGHT;
+        int along = big ? 2 : 1;
+        int h = rg_oled_text_width(side, along);
+        rg_oled_text_vertical_xy(1 + dx, (RG_OLED_HEIGHT - h) / 2, side, big ? 3 : 2, along);
     }
-    /* Capitals use 6 of the 7 font rows: 12 px per line at scale 2, centred in 32 px. */
+    /* Capitals use 6 of the 7 font rows: 12 px per line at scale 2, centred in 32 px. The reserved
+     * corner (e.g. the countdown) sits bottom-right, so only the bottom line gives it room. */
     if (top) {
         rg_oled_text(left + (span - rg_oled_text_width(top, 2)) / 2 + dx, bottom ? 2 : 10, top, 2);
     }
     if (bottom) {
-        rg_oled_text(left + (span - rg_oled_text_width(bottom, 2)) / 2 + dx, 18, bottom, 2);
+        int bspan = span - reserve_right;
+        rg_oled_text(left + (bspan - rg_oled_text_width(bottom, 2)) / 2 + dx, 18, bottom, 2);
     }
 }
 

@@ -1,0 +1,7 @@
+# Listening mode Wi-Fi. Copy this file to /audio/wifi.txt on the microSD card and
+# replace both values. (sdcard/audio/wifi.txt is git-ignored: keep real values there.)
+# Power the phone on (plug in or press RESET) with the handset lifted to start it,
+# then join this network and open http://192.168.4.1 in a browser.
+# SSID: 1..32 characters. PASSWORD: 8..63 characters (required).
+SSID = AgAdiniz
+PASSWORD = parolaniz

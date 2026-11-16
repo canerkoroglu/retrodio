@@ -16,6 +16,9 @@ static void drive(gpio_num_t pin, int level)
 
 void rg_board_pin_float(gpio_num_t pin)
 {
+    /* Detach the pin from the peripheral that used it (SPI CS, I2S) and drop its output
+     * reservation; without this gpio_config() warns "conflict found" for a released driver pin. */
+    gpio_reset_pin(pin);
     gpio_config_t cfg = {
         .pin_bit_mask = 1ULL << pin,
         .mode = GPIO_MODE_INPUT,

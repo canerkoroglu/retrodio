@@ -42,6 +42,41 @@ menu "Guestbook application"
         range 256 65536
         default 1024
 
+    menu "Listening mode (Wi-Fi)"
+        config GB_WIFI_SSID
+            string "Fallback network name when the card has no /audio/wifi.txt"
+            default ""
+            help
+                Empty (default): listening mode needs /audio/wifi.txt on the card. A value set
+                here lives only in your local, git-ignored sdkconfig.
+
+        config GB_WIFI_PASSWORD
+            string "Fallback password when the card has no /audio/wifi.txt (8..63 characters)"
+            default ""
+            help
+                Empty (default): listening mode needs /audio/wifi.txt on the card.
+
+        config GB_WIFI_CHANNEL
+            int "Access point channel"
+            range 1 13
+            default 6
+
+        config GB_WIFI_TX_POWER_QDBM
+            int "Maximum transmit power (0.25 dBm units)"
+            range 8 84
+            default 34
+            help
+                34 = 8.5 dBm. ESP32-C3 Super Mini boards often hold a link better at reduced
+                power; raise it only if the phone loses the network a few metres away.
+
+        config GB_WIFI_IDLE_MIN
+            int "Leave listening mode after this many idle minutes"
+            range 1 60
+            default 5
+            help
+                Idle = handset down, nothing playing and no request from the web page.
+    endmenu
+
     config GB_SOAK_TEST
         bool "Soak test: simulate the hook switch for automated sessions"
         default n

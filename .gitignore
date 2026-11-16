@@ -1,0 +1,3 @@
+# Real listening-mode credentials stay on your computer and the card, never in git.
+# Start from sdcard/audio/wifi.example.txt.
+sdcard/audio/wifi.txt

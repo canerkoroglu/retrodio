@@ -4,6 +4,11 @@ Copy the `audio/` folder to the root of a FAT32-formatted card, then add your
 `greeting.wav`, `instruction.wav` (optional) and `beep.wav` to `audio/greetings/`
 (16 kHz, mono, 16-bit PCM; see the top-level README §6).
 
+`audio/wifi.txt` holds the listening-mode network name and password (`SSID = …`,
+`PASSWORD = …`, 8–63 characters, required; top-level README §9). Start from
+`audio/wifi.example.txt`, copy it to the card as `/audio/wifi.txt` and put in your values.
+`sdcard/audio/wifi.txt` is git-ignored, so a local copy with real values stays out of git.
+
 The device creates these files itself:
 
 | File | Content |

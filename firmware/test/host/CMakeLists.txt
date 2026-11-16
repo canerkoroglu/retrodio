@@ -16,10 +16,11 @@ add_library(rg_pure STATIC
     ${RG}/rg_mic_conv.c
     ${RG}/rg_settings.c
     ${RG}/rg_wav.c
+    ${RG}/rg_wifi_cfg.c
 )
 target_link_libraries(rg_pure PUBLIC m)
 
-foreach(t catalog crc32 mic_conv settings wav)
+foreach(t catalog crc32 mic_conv settings wav wifi_cfg)
     add_executable(test_${t} test_${t}.c)
     target_link_libraries(test_${t} rg_pure)
     add_test(NAME ${t} COMMAND test_${t})
@@ -28,3 +29,5 @@ endforeach()
 # The shipped microSD template must parse without warnings.
 target_compile_definitions(test_settings PRIVATE
     RG_TEMPLATE_CONFIG="${CMAKE_CURRENT_SOURCE_DIR}/../../../sdcard/audio/config.txt")
+target_compile_definitions(test_wifi_cfg PRIVATE
+    RG_TEMPLATE_WIFI="${CMAKE_CURRENT_SOURCE_DIR}/../../../sdcard/audio/wifi.example.txt")

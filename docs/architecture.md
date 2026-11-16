@@ -12,8 +12,10 @@ stateDiagram-v2
     [*] --> WAKING: deep-sleep wake (handset lifted)
     [*] --> ERROR: safe mode (3 crashes in a row)
 
-    INITIALIZING --> HANG_UP: handset already lifted
+    INITIALIZING --> HANG_UP: handset lifted after a crash / software reset
+    INITIALIZING --> WIFI: handset lifted at power-on / RESET
     INITIALIZING --> PREPARING_SLEEP: card read, handset down
+    WIFI --> [*]: Kapat on the page, or 5 min idle -> reboot
     INITIALIZING --> ERROR: card error
 
     WAKING --> PREPARING_SLEEP: false wake (not lifted)
@@ -45,7 +47,7 @@ stateDiagram-v2
     PREPARING_SLEEP --> [*]: down >= 500 ms -> deep sleep (STANDBY)
 ```
 
-Every screen except ERROR uses one layout: the message count rotated 90° at the top-left (`025`, `---` before the card is read, `025!` when the card is almost full), and the action in large letters (2×, up to 11 characters per line) beside it.
+Every screen except ERROR uses one layout: the message count rotated 90° in the left column, vertically centred, with 21 px tall digits (`025`, `---` before the card is read). Four or more characters (`025!` when the card is almost full, or 1000+ messages) are drawn smaller. The action is in large letters (2×, up to 10 characters per line) beside it.
 
 | State | OLED | WS2812B | Rail | Notes |
 |---|---|---|---|---|
@@ -53,12 +55,13 @@ Every screen except ERROR uses one layout: the message count rotated 90° at the
 | WAKING | AHIZEYI / KALDIRIN | blue, short blink | on | lift must stay ≥ 60 ms; card mount, recovery, `config.txt`, catalog |
 | GREETING | AHIZEYI / KALDIRIN | yellow, slow breathing | on | WAV file already created (SD latency can never cost the first words) |
 | INSTRUCTION / BEEP | AHIZEYI / KALDIRIN | yellow, slow breathing | on | `beep.wav`, or a built-in 400 ms 1 kHz tone |
-| RECORDING | KONUSMAYA / BASLAYIN, small 02:59 top-right | green, breathing | on | countdown each second |
+| RECORDING | KONUSMAYA / BASLAYIN, small 2:59 bottom-right | green, breathing | on | countdown each second |
 | MAX_DURATION | AHIZEYI / KAPATIN | yellow, solid | on | message already finalized (decision D9) |
-| SAVING | KAYDEDILIYOR | cyan, fast blink | on | header, fsync, close, re-open, verify |
-| SUCCESS | MESAJINIZ / KAYDEDILDI! | green, solid 2 s | on | count and manifest updated only now |
-| ERROR | KAYIT HATASI · KART HATASI · KART DOLU · SERVIS GEREKLI + hint | red, fast blink | on | min 3 s, until hang-up |
-| HANG_UP | AHIZEYI / KAPATIN | off | on | cold boot or session end with the handset still up |
+| SAVING | LUTFEN / BEKLEYIN | cyan, fast blink | on | header, fsync, close, re-open, verify |
+| SUCCESS | MESAJINIZ / KAYDEDILDI | green, solid 2 s | on | count and manifest updated only now |
+| ERROR | KAYIT HATASI · KART HATASI · KART DOLU · SERVIS GEREKLI · WIFI AYARI YOK + hint | red, fast blink | on | min 3 s, until hang-up |
+| HANG_UP | AHIZEYI / KAPATIN | off | on | crash / software reset or session end with the handset still up |
+| WIFI (listening mode) | WIFI *ssid* / 192.168.4.1 / CALIYOR: MESAJ 12 | blue, slow breathing | on | access point + web player, no guest sessions (§8) |
 
 Rules from the spec, and where they are enforced:
 
@@ -68,7 +71,8 @@ Rules from the spec, and where they are enforced:
 | Never report success before finalization | `gb_fsm.c` `on_saved()` only after `rg_rec_stop()` returns ESP_OK (or a verified salvaged file) |
 | Recording starts only after the beep has finished | `rg_audio_drain()`, then `rg_audio_rx_flush()` |
 | No deep sleep while lifted | PREPARING_SLEEP requires ≥ 500 ms debounced "down" |
-| No session started by a cold boot | INITIALIZING never starts audio |
+| No session started by a cold boot | INITIALIZING never starts a guest session |
+| Wi-Fi only on purpose | WIFI is entered only from INITIALIZING after a power-on / RESET with the handset lifted, never after a crash or watchdog reset |
 | Never an empty file | 0 samples, or fewer than `min_seconds`, are deleted |
 
 ## 2. Tasks
@@ -80,6 +84,8 @@ Rules from the spec, and where they are enforced:
 | `gb_ui` | 3 | 3 KB | renders the UI model (≈13 ms I²C flush) |
 | `rg_led` | 2 | 2.5 KB | 50 Hz effect rendering |
 | main (FSM) | 1 | 10 KB | 10 ms tick: hook debounce, audio events, state transitions |
+| `gb_player` (listening mode only) | 6 | 6 KB | plays the message chosen on the web page (I²S TX) |
+| `httpd` (listening mode only) | 5 | 6 KB | web page, JSON API, file download |
 
 How the tasks share work:
 - **Capture never waits on the SD card or the display.** The audio task is highest priority and only does non-blocking pushes into a 64 KB ring (≈2 s of audio).
@@ -147,3 +153,24 @@ flowchart LR
 | maximum-length message (limit 10 s, hang-up 2 s later) | 4 | saved |
 
 It ends with `RESULT SOAK PASS|FAIL sessions=… saved=… discarded=… errors=… mismatches=…`, which goes to the console and to `log.txt`. Procedure: [`testing.md`](testing.md).
+
+## 8. Listening mode (Wi-Fi)
+
+Power the phone on (plug in, or press RESET) **with the handset lifted**. Instead of AHIZEYI KAPATIN, the WIFI state starts (`gb_web.c`):
+
+- **Access point:** network name and password come from `/audio/wifi.txt` (`SSID = …`, `PASSWORD = …`, template `sdcard/audio/wifi.example.txt`). The password is required. Without a usable file the mode does not start and the OLED shows WIFI AYARI YOK (ERROR state, back to standby after hang-up); an optional menuconfig fallback lives only in the git-ignored `sdkconfig`. WPA2, channel 6, at most 4 phones, transmit power capped at 8.5 dBm (Super Mini antenna).
+- **Web page:** `http://192.168.4.1` lists the messages, newest first. *Çal* plays one through the handset speaker, *Durdur* stops it, *İndir* downloads the WAV file and *Kapat* ends the mode.
+- **No guest sessions** while the mode is on. The guest engine stays idle, so the player owns I²S TX (BCLK and LRC start and stop together, as in a session).
+- **The mode ends** after 5 idle minutes (handset down, nothing playing, no request from the page; `GB_WIFI_IDLE_MIN`) or with *Kapat*. It ends with a reboot, which releases all Wi-Fi memory. A software reset never re-enters the mode, so with the handset still up the phone shows AHIZEYI KAPATIN.
+
+| Endpoint | Method | Result |
+|---|---|---|
+| `/` | GET | the page |
+| `/api/list` | GET | `[[index, duration_ms], …]`, newest first |
+| `/api/status` | GET | `{"playing": index or 0, "pos": ms, "len": ms}` |
+| `/api/play?n=12` | POST | play `MSG_000012.wav` (a newer request interrupts the current one) |
+| `/api/stop` | POST | stop playback |
+| `/api/exit` | POST | leave listening mode (reboot) |
+| `/rec/MSG_000012.wav` | GET | download the file |
+
+Only names that parse as `MSG_nnnnnn.wav` are served, so no other file on the card can be read.

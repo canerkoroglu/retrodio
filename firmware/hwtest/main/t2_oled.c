@@ -61,18 +61,18 @@ tr_t t2_oled(void)
         const char *count, *top, *bottom;
         uint32_t ms;
     } SCREENS[] = {
-        {"024", "AHIZEYI", "KALDIRIN", 2500},      {"024", "KONUSMAYA", "BASLAYIN", 2500},
-        {"024", "AHIZEYI", "KAPATIN", 2000},       {"024", "KAYDEDILIYOR", NULL, 1500},
-        {"025", "MESAJINIZ", "KAYDEDILDI!", 2500},
+        {"024", "AHIZEYI", "KALDIRIN", 2500},     {"024", "KONUSMAYA", "BASLAYIN", 2500},
+        {"024", "AHIZEYI", "KAPATIN", 2000},      {"024", "LUTFEN", "BEKLEYIN", 1500},
+        {"025", "MESAJINIZ", "KAYDEDILDI", 2500},
     };
     for (size_t i = 0; i < sizeof(SCREENS) / sizeof(SCREENS[0]); i++) {
         rg_oled_clear();
         bool recording = i == 1;
         if (recording) {
-            rg_oled_text(RG_OLED_WIDTH - rg_oled_text_width("02:59", 1), 0, "02:59", 1);
+            rg_oled_text(RG_OLED_WIDTH - rg_oled_text_width("2:59", 1), RG_OLED_HEIGHT - 7, "2:59", 1);
         }
         rg_oled_action_screen(SCREENS[i].count, SCREENS[i].top, SCREENS[i].bottom,
-                              recording ? rg_oled_text_width("02:59", 1) + 1 : 0, 0);
+                              recording ? rg_oled_text_width("2:59", 1) + 1 : 0, 0);
         rg_oled_flush();
         vTaskDelay(pdMS_TO_TICKS(SCREENS[i].ms));
     }

@@ -18,6 +18,7 @@ idf_component_register(
         "rg_storage.c"
         "rg_system.c"
         "rg_wav.c"
+        "rg_wifi_cfg.c"
     INCLUDE_DIRS "include"
     REQUIRES
         esp_driver_gpio
